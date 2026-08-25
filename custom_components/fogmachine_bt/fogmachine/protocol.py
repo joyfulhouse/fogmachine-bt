@@ -113,7 +113,9 @@ class FogMachineState:
 # --------------------------------------------------------------------------- #
 def build_request(cmd_id: str, payload: str = "") -> bytes:
     """Build a request frame: ``EE`` + ``0`` + cmd_id + ``0`` + payload + ``.``."""
-    return f"{HEADER}{PHASE_REQUEST}{cmd_id}{REQUEST_CODE}{payload}{END}".encode("ascii")
+    return f"{HEADER}{PHASE_REQUEST}{cmd_id}{REQUEST_CODE}{payload}{END}".encode(
+        "ascii"
+    )
 
 
 def build_power(on: bool) -> bytes:
@@ -185,8 +187,7 @@ def build_time_entry(
 ) -> bytes:
     """Set a schedule time window (cmd 6). 11-char payload."""
     payload = (
-        f"{seq:02d}{ON if enabled else OFF}"
-        f"{from_h:02d}{from_m:02d}{to_h:02d}{to_m:02d}"
+        f"{seq:02d}{ON if enabled else OFF}{from_h:02d}{from_m:02d}{to_h:02d}{to_m:02d}"
     )
     if len(payload) != 11:
         raise ValueError(f"time payload must be 11 chars, got {payload!r}")

@@ -57,7 +57,9 @@ class FogMachineBLEClient:
                 return self._client  # type: ignore[return-value]
             device = self._device_getter()
             if device is None:
-                raise FogMachineError(f"{self._name}: no BLE device available (out of range?)")
+                raise FogMachineError(
+                    f"{self._name}: no BLE device available (out of range?)"
+                )
             _LOGGER.debug("%s: connecting to %s", self._name, device.address)
             client = await establish_connection(
                 BleakClientWithServiceCache,
@@ -72,9 +74,13 @@ class FogMachineBLEClient:
             # discovered and expects EE1c0. back. Best-effort (some units may
             # not reply); the following query is the real readiness check.
             try:
-                await self._txn(client, p.build_connect(), True, DEFAULT_COMMAND_TIMEOUT)
+                await self._txn(
+                    client, p.build_connect(), True, DEFAULT_COMMAND_TIMEOUT
+                )
             except FogMachineError:
-                _LOGGER.debug("%s: connect handshake had no reply; continuing", self._name)
+                _LOGGER.debug(
+                    "%s: connect handshake had no reply; continuing", self._name
+                )
             _LOGGER.debug("%s: connected + notifications enabled", self._name)
             return client
 
@@ -96,7 +102,11 @@ class FogMachineBLEClient:
     def _on_notify(self, _char: BleakGATTCharacteristic, data: bytearray) -> None:
         self._buffer.extend(data)
         # A frame is complete once the end terminator '.' is present.
-        if p.END.encode() in self._buffer and self._response and not self._response.done():
+        if (
+            p.END.encode() in self._buffer
+            and self._response
+            and not self._response.done()
+        ):
             frame = self._buffer.decode("latin1")
             self._buffer = bytearray()
             self._response.set_result(frame)
@@ -117,13 +127,17 @@ class FogMachineBLEClient:
         self._response = self._loop.create_future() if expect_response else None
         _LOGGER.debug("%s: -> %s", self._name, request)
         for i in range(0, len(request), p.WRITE_CHUNK):
-            await client.write_gatt_char(p.CHAR_UUID, request[i : i + p.WRITE_CHUNK], response=True)
+            await client.write_gatt_char(
+                p.CHAR_UUID, request[i : i + p.WRITE_CHUNK], response=True
+            )
         if not expect_response:
             return ""
         try:
             frame = await asyncio.wait_for(self._response, timeout)
         except TimeoutError as err:
-            raise FogMachineError(f"{self._name}: timed out waiting for response") from err
+            raise FogMachineError(
+                f"{self._name}: timed out waiting for response"
+            ) from err
         finally:
             self._response = None
         _LOGGER.debug("%s: <- %s", self._name, frame)
@@ -135,12 +149,16 @@ class FogMachineBLEClient:
             return await self._txn(client, request, expect_response, timeout)
 
     # -- high level ops --------------------------------------------------- #
-    async def async_query(self, timeout: float = DEFAULT_COMMAND_TIMEOUT) -> p.FogMachineState:
+    async def async_query(
+        self, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
         """Read all device state (read-only)."""
         frame = await self._send(p.build_query_all(), True, timeout)
         return p.parse_query_all(frame)
 
-    async def async_set_power(self, on: bool, timeout: float = DEFAULT_COMMAND_TIMEOUT) -> None:
+    async def async_set_power(
+        self, on: bool, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> None:
         frame = await self._send(p.build_power(on), True, timeout)
         _cmd, rc, _payload = p.parse_simple_response(frame)
         if rc != p.RC_OK:

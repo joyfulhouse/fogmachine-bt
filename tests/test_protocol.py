@@ -24,7 +24,7 @@ def _block(sub_id: str, data: str, rc: str = "0") -> str:
 
 # --- request builders ------------------------------------------------------ #
 def test_build_power_inverted():
-    assert p.build_power(True) == b"EE0100."   # ON  = '0'
+    assert p.build_power(True) == b"EE0100."  # ON  = '0'
     assert p.build_power(False) == b"EE0101."  # OFF = '1'
 
 
@@ -49,7 +49,7 @@ def test_build_request_shape():
 
 
 def test_build_weekday_and_bounds():
-    assert p.build_weekday(2, True) == b"EE03020."   # Wed ON  -> idx 2 + '0'
+    assert p.build_weekday(2, True) == b"EE03020."  # Wed ON  -> idx 2 + '0'
     assert p.build_weekday(2, False) == b"EE03021."  # Wed OFF -> idx 2 + '1'
     for bad in (-1, 7):
         try:
@@ -70,9 +70,9 @@ def test_build_freq_and_time_widths():
 def test_build_datetime_sync_weekday_index():
     # 2026-08-24 is a Monday -> datetime.weekday() == 0
     frame = p.build_datetime_sync(datetime(2026, 8, 24, 13, 5, 9))
-    assert frame.startswith(b"EE0+0")       # EE + phase0 + cmd'+' + code0
+    assert frame.startswith(b"EE0+0")  # EE + phase0 + cmd'+' + code0
     assert b"20260824130509" in frame
-    assert frame.endswith(b"0.")            # Monday index 0 + terminator
+    assert frame.endswith(b"0.")  # Monday index 0 + terminator
     # Sunday -> 6
     assert p.build_datetime_sync(datetime(2026, 8, 23, 0, 0, 0)).endswith(b"6.")
 
@@ -87,14 +87,14 @@ def test_parse_simple_response():
 
 def test_parse_query_all_full():
     resp = (
-        _block("0", "010530")             # running 1h05m30s
-        + _block("1", "0")                # power ON
-        + _block("2", "2")                # advanced mode
-        + _block("3", "0000011")          # inverted: Mon-Fri on ('0'), Sat/Sun off ('1')
-        + _block("4", "0")                # time customizable ON
-        + _block("5", "1")                # freq customizable OFF
-        + _block("6", "01006002230")      # window 1: 06:00-22:30 enabled
-        + _block("7", "0100000300005")    # freq 1: 3s on / 5s off enabled
+        _block("0", "010530")  # running 1h05m30s
+        + _block("1", "0")  # power ON
+        + _block("2", "2")  # advanced mode
+        + _block("3", "0000011")  # inverted: Mon-Fri on ('0'), Sat/Sun off ('1')
+        + _block("4", "0")  # time customizable ON
+        + _block("5", "1")  # freq customizable OFF
+        + _block("6", "01006002230")  # window 1: 06:00-22:30 enabled
+        + _block("7", "0100000300005")  # freq 1: 3s on / 5s off enabled
         + p.END
     )
     st = p.parse_query_all(resp)
@@ -113,7 +113,7 @@ def test_parse_query_all_partial_stops_on_fail():
     # A failing sub-block (rc=1) stops parsing; earlier fields survive.
     resp = _block("1", "1") + _block("0", "000000", rc="1") + p.END
     st = p.parse_query_all(resp)
-    assert st.power_on is False       # '1' = OFF
+    assert st.power_on is False  # '1' = OFF
     assert st.running_seconds is None  # not reached
 
 

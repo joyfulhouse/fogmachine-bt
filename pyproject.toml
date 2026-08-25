@@ -5,7 +5,17 @@ description = "Home Assistant local-BLE integration for FG-series fog / misting 
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
-authors = [{ name = "Bryan Li" }]
+authors = [
+    { name = "JoyfulHouse Real Estate LLC", email = "btli@users.noreply.github.com" },
+]
+keywords = ["homeassistant", "bluetooth", "ble", "fog machine", "misting", "smart home"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     # Runtime deps of the HA integration are declared in the component's
     # manifest.json (HA installs them). Listed here for standalone/dev use.
@@ -26,7 +36,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py313"
-line-length = 100
+line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

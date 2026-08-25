@@ -38,11 +38,15 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
         self._client = FogMachineBLEClient(self._get_device, entry.title or address)
 
     def _get_device(self) -> BLEDevice | None:
-        return bluetooth.async_ble_device_from_address(self.hass, self.address, connectable=True)
+        return bluetooth.async_ble_device_from_address(
+            self.hass, self.address, connectable=True
+        )
 
     async def _async_update_data(self) -> FogMachineState:
         if self._get_device() is None:
-            raise UpdateFailed(f"{self.address} not currently reachable by any Bluetooth proxy")
+            raise UpdateFailed(
+                f"{self.address} not currently reachable by any Bluetooth proxy"
+            )
         try:
             return await self._client.async_query()
         except (FogMachineError, BleakError) as err:
