@@ -15,7 +15,10 @@ FG53850 (`02:11:23:34:5A:17`) **is visible to the HA BLE mesh, but only just.**
 | 60 s | `aiosense-adu-main` only | −78 dBm (oscillates −78…−88) |
 
 - It advertises **connectable** with service `FFE0`, so a proxy-mediated GATT
-  connection is possible in principle.
+  connection is possible — and **confirmed working 2026-08-24**: HA connected
+  via `adu-main`, discovered FFE0/FFE1, and completed a query (power/mode/
+  runtime decoded). So −78…−88 dBm via the single proxy *is* usable for control,
+  though a closer proxy would improve reliability.
 - **−78…−88 dBm from a single proxy is marginal for a sustained connection.**
   Advertisements are heard at weaker RSSI than a reliable connection needs
   (rule of thumb: want ≳ −80 dBm, ideally −70s, for dependable GATT over a

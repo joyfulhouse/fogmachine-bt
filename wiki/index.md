@@ -16,8 +16,8 @@ ESPHome BLE proxies.
 | Independent Codex protocol analysis | ✅ done + cross-checked — `sources/codex-analysis/PROTOCOL_CODEX.md` (caught the `EE0c0.` connect-frame nuance) |
 | HA proxy visibility of FG53850 confirmed | ✅ yes (marginal, 1 proxy) — see [ha-proxy-coverage](ha-proxy-coverage.md) |
 | Live GATT probe from laptop | ⛔ blocked by VLAN (IoT net reachable only from HA) — see [ha-proxy-coverage](ha-proxy-coverage.md) |
-| HA custom integration (protocol + switch/sensor) | ✅ built — `custom_components/fogmachine_bt/`; 12 unit tests + HA-import check pass |
-| Live validation on real device (in HA) | ⬜ pending — first HA connection is the live test |
+| HA custom integration (protocol + switch/sensor) | ✅ built + **installed in HA** via HACS (`joyfulhouse/fogmachine-bt` v0.1.3); 12 unit tests + HA-import check pass |
+| Live validation on real device (in HA) | ✅ **DONE 2026-08-24** — connected via `adu-main`, query decoded: power=**on**, mode=always, running_time=5 s. Two live fixes: FFE0-only matcher, FFE1 write-without-response. |
 
 ## The 30-second summary
 
