@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-24
+
+### Fixed
+
+- **Critical:** the Bluetooth discovery matcher used `local_name: "FG*"`, which
+  Home Assistant rejects (local-name matchers may not have a wildcard in the
+  first 3 characters). This failed the whole `bluetooth` component setup and
+  cascaded to `esphome`/`bluetooth_adapters`. The matcher now keys on the
+  `FFE0` service UUID only, and the `FG` name filter moved into the config flow
+  (`async_step_bluetooth` aborts non-`FG` devices).
+
 ## [0.1.0] - 2026-08-24
 
 ### Added

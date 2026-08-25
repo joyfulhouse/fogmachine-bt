@@ -16,7 +16,8 @@
     },
     "abort": {
       "no_devices_found": "No FG-series fog machines were found nearby. Ensure the machine is powered on and within range of a Bluetooth proxy.",
-      "already_configured": "This fog machine is already configured."
+      "already_configured": "This fog machine is already configured.",
+      "not_supported": "This Bluetooth device is not an FG-series fog machine."
     }
   },
   "entity": {

@@ -34,6 +34,10 @@ class FogMachineConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> ConfigFlowResult:
         """Handle a device discovered via Bluetooth."""
+        # The manifest matcher is FFE0-only (generic HM-10); narrow to FG* here
+        # (HA rejects local_name matchers with a wildcard in the first 3 chars).
+        if not (discovery_info.name or "").upper().startswith(NAME_PREFIX):
+            return self.async_abort(reason="not_supported")
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
         self._discovery = discovery_info
