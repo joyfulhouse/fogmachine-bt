@@ -27,23 +27,19 @@ class FogMachineSensorDescription(SensorEntityDescription):
     value_fn: Callable[[FogMachineState], int | float | str | None]
 
 
-def _running_hours(s: FogMachineState) -> float | None:
-    # The device reports cumulative running time as HH:MM:SS; surface it in
-    # hours, which is the meaningful unit for an operating-time meter.
-    if s.running_seconds is None:
-        return None
-    return round(s.running_seconds / 3600, 2)
-
-
 SENSORS: tuple[FogMachineSensorDescription, ...] = (
     FogMachineSensorDescription(
         key="running_time",
         translation_key="running_time",
         device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.HOURS,
+        # Report the canonical duration unit (seconds) and let HA display it in
+        # hours — the meaningful unit for an operating-time meter. The device
+        # reports cumulative running time as HH:MM:SS.
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
         suggested_display_precision=2,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=_running_hours,
+        value_fn=lambda s: s.running_seconds,
     ),
     FogMachineSensorDescription(
         key="mode",

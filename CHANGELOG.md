@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-25
+
+### Fixed
+
+- **Running-time sensor now displays in hours.** Uses the canonical duration unit
+  (seconds) with `suggested_unit_of_measurement=hours` so Home Assistant converts
+  and labels it correctly (0.1.5's hours-native approach left a value/unit
+  mismatch on the `DURATION` device class, whose base unit is seconds).
+
 ## [0.1.5] - 2026-08-25
 
 ### Fixed
@@ -16,10 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returned the device's stale pre-change state. The command is now applied
   **optimistically** (the device acknowledges it with a success code) and the
   racy immediate read-back is removed; the regular poll reconciles state.
-- **Running-time sensor now reports hours.** The device reports cumulative
-  running time as `HH:MM:SS`; the sensor previously surfaced it in seconds. It is
-  now expressed in hours (2-decimal precision), which is the meaningful unit for
-  an operating-time meter.
+- **Running-time sensor reports hours** instead of seconds (the device reports
+  cumulative running time as `HH:MM:SS`).
 
 ### Added
 
