@@ -1,0 +1,42 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add fog machine",
+        "description": "Select a nearby FG-series fog machine.",
+        "data": {
+          "address": "Device"
+        }
+      },
+      "confirm": {
+        "title": "Add fog machine",
+        "description": "Set up {name} ({address})?"
+      }
+    },
+    "abort": {
+      "no_devices_found": "No FG-series fog machines were found nearby. Ensure the machine is powered on and within range of a Bluetooth proxy.",
+      "already_configured": "This fog machine is already configured."
+    }
+  },
+  "entity": {
+    "switch": {
+      "power": {
+        "name": "Power"
+      }
+    },
+    "sensor": {
+      "running_time": {
+        "name": "Running time"
+      },
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "always": "Always spray",
+          "nimble": "Nimble",
+          "advanced": "Advanced"
+        }
+      }
+    }
+  }
+}

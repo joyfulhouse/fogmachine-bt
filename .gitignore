@@ -1,0 +1,21 @@
+# Heavy / regenerable reverse-engineering artifacts — keep out of git.
+# The durable record is wiki/ + sources/codex-analysis/ + the scanner scripts.
+sources/apk/
+sources/decompiled/
+
+# Raw BLE scan dumps contain third-party (neighbour) device MACs/names — the
+# FG53850-relevant findings live in wiki/ha-proxy-coverage.md; regenerate the
+# dumps with sources/ha-scan/ble_scan.py when needed.
+sources/ha-scan/ble_devices_dump*.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.uv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
