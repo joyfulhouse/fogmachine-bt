@@ -37,8 +37,9 @@ untraced claims, and stale `⚠️ unverified` markers that a live test resolved
 - Wire protocol: ASCII, no checksum — `EE <phase> <cmdId> <code> <payload> .`.
   **Inverted booleans: `0`=ON/enabled, `1`=OFF/disabled.**
 - No pairing/auth/encryption; "connect" is just a GATT connect + notify enable.
-- Live proxy visibility: only `aiosense-adu-main` hears FG53850, ~−78…−88 dBm
-  (marginal) → recommend a closer ESPHome proxy. `wiki/ha-proxy-coverage.md`.
+- RSSI over a Bluetooth proxy is often weak, and the device **stops advertising
+  while connected** → the integration connects per-poll and disconnects
+  immediately. See `wiki/ha-proxy-coverage.md`.
 - BLE exposes power, running time, schedule/freq cycles, weekdays, mode, clock —
   **no** water/temp/humidity.
 
@@ -46,10 +47,9 @@ untraced claims, and stale `⚠️ unverified` markers that a live test resolved
 
 - **Python: use `uv`** (`uv run …`, `uv sync`). Python 3.13+. Never pip.
 - The BLE scanner is a PEP-723 uv script: `uv run sources/ha-scan/ble_scan.py`
-  (`FILTER=FG SCAN_SECONDS=60`, needs `HA_TOKEN`).
-- HA token: `HA_PROD_LONG_LIVED_TOKEN` in
-  `~/Projects/joyfulhouse/homeassistant-dev/eg4_web_monitor/.env`. HA at
-  `hass.joyful.house:8123` (REST) / `ws://…/api/websocket` (websocket).
+  (`FILTER=FG SCAN_SECONDS=60`). It needs `HA_TOKEN` (a Home Assistant long-lived
+  access token) and optionally `HA_WS_URL` (defaults to `homeassistant.local`).
+  Keep tokens in a local, git-ignored `.env` — never commit them.
 - RE tools: `apkeep` (download), `jadx` (Java), `apktool` (manifest/smali),
   `ghidra` (only if native libs appear — none in this APK).
 - The HA integration follows HA custom-component conventions; keep the protocol
@@ -65,5 +65,5 @@ untraced claims, and stale `⚠️ unverified` markers that a live test resolved
 ## Next steps
 
 Tracked in [`wiki/index.md`](wiki/index.md) (status table) and
-[`wiki/integration-plan.md`](wiki/integration-plan.md) ("Open items"). The
-immediate one is a live GATT probe via `adu-main` to confirm framing.
+[`wiki/integration-plan.md`](wiki/integration-plan.md) ("Open items"). Phase 2
+(schedule/frequency/weekday entities) is the main remaining feature work.

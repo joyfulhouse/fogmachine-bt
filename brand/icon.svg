@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E5F86"/>
+      <stop offset="1" stop-color="#0B2942"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C7CA8"/>
+      <stop offset="1" stop-color="#134463"/>
+    </linearGradient>
+    <radialGradient id="mist" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="0.6" stop-color="#DFF3FF" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#9FDBF6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="port" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0A2033"/>
+      <stop offset="0.7" stop-color="#12405E"/>
+      <stop offset="1" stop-color="#2C7CA8"/>
+    </radialGradient>
+  </defs>
+
+  <!-- fog machine body -->
+  <g>
+    <rect x="26" y="150" width="176" height="66" rx="16" fill="url(#body)"/>
+    <!-- top control panel strip -->
+    <rect x="40" y="160" width="120" height="16" rx="8" fill="url(#panel)"/>
+    <!-- indicator lights -->
+    <circle cx="52" cy="168" r="4" fill="#41BDF5"/>
+    <circle cx="68" cy="168" r="4" fill="#7FE3C0"/>
+    <circle cx="84" cy="168" r="4" fill="#FFC24B"/>
+    <!-- feet -->
+    <rect x="44" y="216" width="26" height="10" rx="4" fill="#0B2942"/>
+    <rect x="158" y="216" width="26" height="10" rx="4" fill="#0B2942"/>
+    <!-- emitter port on the right face -->
+    <circle cx="176" cy="192" r="20" fill="url(#port)"/>
+    <circle cx="176" cy="192" r="20" fill="none" stroke="#41BDF5" stroke-width="3" stroke-opacity="0.7"/>
+    <circle cx="176" cy="192" r="9" fill="#0A2033"/>
+  </g>
+
+  <!-- fog billowing up and to the right from the emitter -->
+  <g>
+    <circle cx="196" cy="150" r="26" fill="url(#mist)"/>
+    <circle cx="168" cy="112" r="34" fill="url(#mist)"/>
+    <circle cx="206" cy="96"  r="40" fill="url(#mist)"/>
+    <circle cx="150" cy="70"  r="30" fill="url(#mist)"/>
+    <circle cx="192" cy="52"  r="26" fill="url(#mist)"/>
+    <circle cx="128" cy="104" r="22" fill="url(#mist)"/>
+    <!-- droplets -->
+    <circle cx="236" cy="128" r="5" fill="#9FDBF6" fill-opacity="0.9"/>
+    <circle cx="120" cy="52"  r="4" fill="#9FDBF6" fill-opacity="0.85"/>
+    <circle cx="228" cy="66"  r="4" fill="#9FDBF6" fill-opacity="0.8"/>
+  </g>
+</svg>

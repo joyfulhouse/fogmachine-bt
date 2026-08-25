@@ -102,6 +102,6 @@ Given marginal RF ([ha-proxy-coverage](ha-proxy-coverage.md)):
 4. Verify the BLE MAC is stable across power cycles (unique_id safety).
 5. Confirm the second unit's advertised name matches `FG*`.
 
-A safe first step is a **read-only live probe** (connect via `adu-main`,
+A safe first step is a **read-only live probe** (connect via a Bluetooth proxy,
 `start_notify` FFE1, send `EE000.` query-all, log raw bytes) before writing any
 control code.

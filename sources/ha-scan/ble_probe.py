@@ -2,14 +2,19 @@
 # requires-python = ">=3.11"
 # dependencies = ["aioesphomeapi>=24"]
 # ///
-"""Read-only live GATT probe of FG53850 via the ESPHome BLE proxy `adu-main`.
+"""Read-only live GATT probe of an FG-series fog machine via an ESPHome BLE proxy.
 
-Connects to the ESPHome native API, opens a proxied GATT connection to the fog
-machine, discovers FFE0/FFE1, enables notifications, sends ONLY the read-only
+Connects to an ESPHome proxy's native API, opens a proxied GATT connection to the
+fog machine, discovers FFE0/FFE1, enables notifications, sends ONLY the read-only
 query-all frame `EE000.`, and logs the raw response. Never sends a control
 (power) command.
 
-Env: ESPHOME_HOST, ESPHOME_NOISE_PSK, TARGET_MAC (default 02:11:23:34:5A:17)
+Note: an ESPHome proxy's native API (:6053) is usually only reachable from the
+Home Assistant host itself, so run this where HA runs (or from a host on the same
+network segment as the proxy) rather than from a laptop.
+
+Env (all required): ESPHOME_HOST (proxy IP/host), ESPHOME_NOISE_PSK (proxy API
+encryption key), TARGET_MAC (the fog machine's BLE address).
 """
 import asyncio
 import os
@@ -17,9 +22,9 @@ import sys
 
 from aioesphomeapi import APIClient
 
-HOST = os.environ.get("ESPHOME_HOST", "10.100.12.244")
+HOST = os.environ["ESPHOME_HOST"]
 PSK = os.environ["ESPHOME_NOISE_PSK"]
-MAC = os.environ.get("TARGET_MAC", "02:11:23:34:5A:17").upper()
+MAC = os.environ["TARGET_MAC"].upper()
 ADDR = int(MAC.replace(":", ""), 16)
 QUERY_ALL = b"EE000."  # read-only status request; does NOT actuate the pump
 

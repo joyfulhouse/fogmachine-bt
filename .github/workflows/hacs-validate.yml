@@ -24,5 +24,3 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
-          # Not yet in the home-assistant/brands repo (custom integration).
-          ignore: brands

@@ -1,111 +1,83 @@
-# HA Bluetooth proxy coverage for FG53850
+# Connectivity: Bluetooth proxies & weak links
 
-Purpose: can Home Assistant's BLE proxies see/reach the fog machine, and which one.
-Status: **verified live** 2026-08-24 via `bluetooth/subscribe_advertisements`.
-Scanner script: `sources/ha-scan/ble_scan.py`. Raw dumps:
-`sources/ha-scan/ble_devices_dump.json` (28 s), `…_60s.json` (60 s).
+Purpose: how FG-series machines behave on a Bluetooth link and how the
+integration is designed to stay reliable over a marginal one.
+Status: **verified live** — device behaviour confirmed against real hardware.
+Scanner: `sources/ha-scan/ble_scan.py` (reports which proxy hears the device and
+at what RSSI).
 
-## Result
+## The machine is reachable over HA's Bluetooth mesh
 
-FG53850 (`02:11:23:34:5A:17`) **is visible to the HA BLE mesh, but only just.**
+FG-series machines advertise a **connectable** GATT peripheral with service
+`FFE0` ([ble-transport](ble-transport.md)), so any Home Assistant Bluetooth path
+— a local adapter or an **ESPHome BLE proxy** — can connect and control them.
+Because these are low-power modules with small antennas, RSSI is often weak
+(commonly around −80 dBm or worse) when the nearest proxy is not close.
 
-| Scan | Proxies that heard FG53850 | Best RSSI |
-|---|---|---|
-| 28 s | `aiosense-adu-main` only | −88 dBm |
-| 60 s | `aiosense-adu-main` only | −78 dBm (oscillates −78…−88) |
+## Critical: the device stops advertising while connected
 
-- It advertises **connectable** with service `FFE0`, so a proxy-mediated GATT
-  connection is possible — and **confirmed working 2026-08-24**: HA connected
-  via `adu-main`, discovered FFE0/FFE1, and completed a query (power/mode/
-  runtime decoded). So −78…−88 dBm via the single proxy *is* usable for control,
-  though a closer proxy would improve reliability.
-- **−78…−88 dBm from a single proxy is marginal for a sustained connection.**
-  Advertisements are heard at weaker RSSI than a reliable connection needs
-  (rule of thumb: want ≳ −80 dBm, ideally −70s, for dependable GATT over a
-  proxy). Expect occasional connect/notify failures at this level → the client
-  must use retry/reconnect ([integration-plan](integration-plan.md)).
+These are **single-connection** HM-10-class modules: while a BLE central is
+connected, the device **stops broadcasting advertisements entirely**. On a
+marginal link this has two important consequences:
 
-## About `aiosense-adu-bedroom` (Bryan's question)
+- A **persistently-held GATT connection hides the device from every proxy.** If
+  the weak link then drops, Home Assistant can no longer see an advertisement to
+  reconnect, and the entity is stuck `unavailable`.
+- Holding the connection also monopolises the one marginal RF path.
 
-`adu-bedroom`'s proxy **is enabled and healthy** — it just doesn't hear FG53850.
+This is the opposite of the usual HA-Bluetooth advice ("keep the connection
+open"), and it drives the integration's polling design below.
 
-- The HA `bluetooth` config entry lists it as
-  `aiosense-adu-bedroom (70:04:1D:22:77:D8)`, but ESP32 advertises its **BLE**
-  MAC as base+2 = `70:04:1D:22:77:DA`. Under that address it appears in the dump
-  having heard 6 other devices at best −36 dBm → **its proxy works fine.**
-- Over both the 28 s and 60 s scans it **never** heard FG53850. So despite being
-  "one wall closer" by intuition, its RF path to the machine is actually worse
-  (wall material / angle / the machine's antenna orientation toward adu-main).
-- All 15 `aiosense-*` proxies are active BLE scanners (each appears as a source
-  for many devices). Config MAC vs BLE-source MAC differ by +2 for most units
-  (adu-main is the exception where they coincide).
+## Integration design for weak links
 
-## The device stops advertising while connected (critical)
+Implemented in `fogmachine/client.py` + `coordinator.py` (see `const.py` for the
+tunables):
 
-Confirmed live 2026-08-25: FG53850 is a single-connection HM-10 module that
-**stops broadcasting advertisements whenever a BLE central is connected**. Proof:
-with the integration enabled (holding a persistent GATT link via `adu-main`),
-FG53850 vanished from a 75 s all-proxy scan; the instant the config entry was
-disabled it reappeared within 15 s (`02:11:23:34:5A:17`, connectable, −90 dBm).
+- **Connect per poll, disconnect immediately** (`disconnect_after=True`). The
+  device spends almost all its time advertising, so it stays discoverable and
+  reconnectable between polls.
+- **Long base poll interval** (state changes slowly) with **exponential backoff**
+  while the device is unreachable, reset on the next success — avoids hammering a
+  bad link.
+- **Hold last-known state** through a few consecutive failures instead of
+  flapping entities to `unavailable` on an intermittent link.
 
-Two consequences on a marginal single-proxy link:
+This makes a weak link *behave well*; it cannot make a very weak link *fast or
+certain*. Expect polls to succeed intermittently at low RSSI, and time-based
+sensors (e.g. running time) to update on a coarser cadence.
 
-- A **persistently-held connection hides the device from every proxy**, so if the
-  weak link drops, HA can no longer see an advertisement to reconnect — it's
-  stuck `unavailable` until something releases the slot.
-- Continuous connection also monopolises the one marginal RF path.
+## Improving reliability
 
-**Integration fix (v0.1.4, since a closer proxy is not deployable):** connect
-**per poll and disconnect immediately** (`disconnect_after=True`), so the device
-spends almost all its time advertising and stays reconnectable; poll on a long
-base interval (180 s) with **exponential backoff** (to 30 min) while unreachable;
-and **hold last-known state** through a few failures rather than flapping. See
-`const.py` and [integration-plan](integration-plan.md).
+1. **Put a Bluetooth proxy near the machine.** A proxy with line-of-sight and
+   good RSSI (roughly −70 dBm or better) makes GATT connections solid. This is
+   the single most effective improvement, and worth doing before adding more
+   units. Where a closer proxy is not physically possible (e.g. an outdoor
+   machine with nowhere to mount one), the weak-link design above is what keeps
+   it usable.
+2. **Check coverage with the scanner.** Run `sources/ha-scan/ble_scan.py`
+   (`FILTER=FG`, `SCAN_SECONDS=60`) to see which proxy hears each machine and at
+   what RSSI. **Stop/disable the integration first** — otherwise its held
+   connection suppresses the advertisement you're trying to observe.
+3. **With multiple units,** confirm each is heard by *some* proxy; Home Assistant
+   automatically picks the best scanner per device.
 
-## Recommendation
+## Live GATT validation
 
-1. **It works today** through `aiosense-adu-main` at −78…−90 dBm — marginal, so
-   expect intermittent polls (the v0.1.4 backoff + hold-last-state design is
-   built for exactly this).
-2. A closer proxy is **not deployable** here (outdoors, nowhere to mount one), so
-   optimise the software for the weak link rather than chasing RSSI — done in
-   v0.1.4. If a mount ever becomes possible, an ESP32 proxy near the ADU exterior
-   would move RSSI into the −60s and make GATT solid.
-3. Re-run `sources/ha-scan/ble_scan.py` (set `SCAN_SECONDS`, `FILTER=FG`) to check
-   coverage. **Note:** disable/stop the integration first, or its held connection
-   will suppress the very advertisement you're scanning for.
-4. With two units, verify **each** is heard by *some* proxy; HA picks the best
-   scanner per device automatically.
+A laptop generally **cannot** reach an ESPHome proxy's native API (port 6053) —
+it's typically firewalled to the Home Assistant host only. So proxied-GATT
+validation should run **where Home Assistant runs** (which is exactly where the
+integration itself runs). `sources/ha-scan/ble_probe.py` performs a read-only
+connect + query-all and logs the raw response; point it at a reachable proxy via
+the `ESPHOME_HOST` / `ESPHOME_NOISE_PSK` / `TARGET_MAC` env vars.
 
-## Live GATT probe attempt (2026-08-24) — blocked by VLAN, not by the device
-
-Tried a read-only proxied GATT probe from the laptop via `aioesphomeapi`
-(`sources/ha-scan/ble_probe.py`): connect to adu-main's ESPHome native API →
-proxy-connect FG53850 → read query-all `EE000.`.
-
-**Blocked at the network layer:** adu-main's API (`10.100.12.244:6053`, IoT VLAN)
-is **not routable** from the laptop *or* from any homelab server
-(172.16.1.x) — all return unreachable. Only Home Assistant (`10.100.128.3`, on
-the 10.100 net) can reach the ESPHome proxies' API port. This is the intended,
-secure topology (BLE-proxy API access restricted to HA) — do **not** punch a
-UniFi hole for it.
-
-**Consequence:** the live GATT validation must run **where HA runs**, i.e.
-through the integration itself once installed in HA (HA has the proxy path).
-The `ble_probe.py` script is retained and works — it just needs to run from a
-host on the 10.100 network (e.g. an HA add-on / a box on the IoT VLAN). The
-laptop-side path we *can* use is the advertisement scan below (via HA's
-websocket on `:8123`, which is reachable).
-
-## How to reproduce the scan
+## Reproduce the advertisement scan
 
 ```bash
-export HA_TOKEN=$(grep '^HA_PROD_LONG_LIVED_TOKEN=' \
-  ~/Projects/joyfulhouse/homeassistant-dev/eg4_web_monitor/.env | cut -d= -f2-)
+export HA_TOKEN=<a Home Assistant long-lived access token>
+export HA_WS_URL=ws://<your-ha-host>:8123/api/websocket   # optional
 export FILTER=FG SCAN_SECONDS=60
 uv run sources/ha-scan/ble_scan.py
 ```
 
-The script authenticates to `ws://hass.joyful.house:8123/api/websocket`,
-subscribes to advertisements, and prints every proxy that hears the filter
-target with per-proxy RSSI (strongest first).
+The script subscribes to `bluetooth/subscribe_advertisements` and prints every
+proxy that hears the filter target, with per-proxy RSSI (strongest first).

@@ -8,11 +8,15 @@
 Reports, for a name/address substring filter, every proxy (scanner) that hears
 the device and the RSSI it hears it at — i.e. which BLE proxy is closest.
 
+Note: if the integration is installed and enabled, stop/disable it before
+scanning — these devices stop advertising while a central is connected, so a
+held connection suppresses the very advertisement you're looking for.
+
 Env:
-  HA_WS_URL      default ws://hass.joyful.house:8123/api/websocket
+  HA_WS_URL      default ws://homeassistant.local:8123/api/websocket
   HA_TOKEN       long-lived token (required)
   SCAN_SECONDS   default 25
-  FILTER         name/address substring to match (default FG53850)
+  FILTER         name/address substring to match (default FG)
   PROXY_NAMES    optional JSON map {source_mac_upper: friendly_name}
 """
 import asyncio
@@ -23,10 +27,10 @@ import time
 
 import websockets
 
-HA_WS_URL = os.environ.get("HA_WS_URL", "ws://hass.joyful.house:8123/api/websocket")
+HA_WS_URL = os.environ.get("HA_WS_URL", "ws://homeassistant.local:8123/api/websocket")
 TOKEN = os.environ["HA_TOKEN"]
 SCAN_SECONDS = float(os.environ.get("SCAN_SECONDS", "25"))
-FILTER = os.environ.get("FILTER", "FG53850").upper()
+FILTER = os.environ.get("FILTER", "FG").upper()
 PROXY_NAMES = json.loads(os.environ.get("PROXY_NAMES", "{}"))
 
 

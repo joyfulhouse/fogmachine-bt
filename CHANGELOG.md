@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Brand assets (`custom_components/fogmachine_bt/brand/{icon,logo}.png` + hDPI
+  `@2x` variants, SVG sources under `brand/`) so HACS renders an icon and passes
+  brand validation without the `ignore: brands` workaround.
+
+### Changed
+
+- Rewrote `README.md` to the standard JoyfulHouse integration layout (badges,
+  features, install, entities, automations, troubleshooting).
+- Scrubbed environment-specific network details (proxy names, host/VLAN
+  addresses, token paths) from the wiki and helper scripts; the wiki now
+  documents the device/protocol and the integration's design generically.
+
 ## [0.1.4] - 2026-08-25
 
 ### Changed
