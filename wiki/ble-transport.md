@@ -55,7 +55,12 @@ From `inRun()`:
   looping until the whole request is sent.
 - Batch/composed commands are additionally packed so that multiple short
   sub-requests can share a 20-byte write when they fit.
-- Default write type (write-with-response); `onCharacteristicWrite` only logs.
+- Write type: **write-without-response** on real hardware. ✅ Confirmed live
+  2026-08-24 — the FG53850's `FFE1` advertises write-without-response only;
+  writing *with* response returns GATT error 3 ("write not permitted"). The app
+  uses `WRITE_TYPE_DEFAULT` (Android then picks per the characteristic's
+  properties); a Bleak client must use `response=False`. `onCharacteristicWrite`
+  only logs.
 - A pre-write busy-wait polls `mDeviceBusy` (reflection) on API ≤ 30, or sleeps
   ~3 ms on newer Android. `bleWriteSpanTime` = 10 ms nominal spacing.
 

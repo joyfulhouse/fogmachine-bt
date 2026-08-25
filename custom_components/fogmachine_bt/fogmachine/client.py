@@ -43,6 +43,10 @@ class FogMachineBLEClient:
         self._buffer = bytearray()
         self._response: asyncio.Future[str] | None = None
         self._loop = asyncio.get_running_loop()
+        # Determined from the FFE1 characteristic at connect time. HM-10 clones
+        # are commonly write-without-response only (write-with-response returns
+        # GATT error 3 "write not permitted").
+        self._write_response = False
 
     # -- connection ------------------------------------------------------- #
     @property
@@ -69,6 +73,18 @@ class FogMachineBLEClient:
                 use_services_cache=True,
             )
             await client.start_notify(p.CHAR_UUID, self._on_notify)
+            # Pick write type from the characteristic's advertised properties:
+            # prefer write-without-response (HM-10 serial pipe) to avoid GATT
+            # error 3 on write-without-response-only clones.
+            char = client.services.get_characteristic(p.CHAR_UUID)
+            props = list(char.properties) if char else []
+            self._write_response = "write-without-response" not in props and "write" in props
+            _LOGGER.debug(
+                "%s: FFE1 properties=%s -> write_response=%s",
+                self._name,
+                props,
+                self._write_response,
+            )
             self._client = client
             # Protocol init handshake: the app writes EE0c0. once services are
             # discovered and expects EE1c0. back. Best-effort (some units may
@@ -128,7 +144,7 @@ class FogMachineBLEClient:
         _LOGGER.debug("%s: -> %s", self._name, request)
         for i in range(0, len(request), p.WRITE_CHUNK):
             await client.write_gatt_char(
-                p.CHAR_UUID, request[i : i + p.WRITE_CHUNK], response=True
+                p.CHAR_UUID, request[i : i + p.WRITE_CHUNK], response=self._write_response
             )
         if not expect_response:
             return ""
