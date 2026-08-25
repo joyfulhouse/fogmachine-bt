@@ -40,19 +40,42 @@ FG53850 (`02:11:23:34:5A:17`) **is visible to the HA BLE mesh, but only just.**
   for many devices). Config MAC vs BLE-source MAC differ by +2 for most units
   (adu-main is the exception where they coincide).
 
+## The device stops advertising while connected (critical)
+
+Confirmed live 2026-08-25: FG53850 is a single-connection HM-10 module that
+**stops broadcasting advertisements whenever a BLE central is connected**. Proof:
+with the integration enabled (holding a persistent GATT link via `adu-main`),
+FG53850 vanished from a 75 s all-proxy scan; the instant the config entry was
+disabled it reappeared within 15 s (`02:11:23:34:5A:17`, connectable, −90 dBm).
+
+Two consequences on a marginal single-proxy link:
+
+- A **persistently-held connection hides the device from every proxy**, so if the
+  weak link drops, HA can no longer see an advertisement to reconnect — it's
+  stuck `unavailable` until something releases the slot.
+- Continuous connection also monopolises the one marginal RF path.
+
+**Integration fix (v0.1.4, since a closer proxy is not deployable):** connect
+**per poll and disconnect immediately** (`disconnect_after=True`), so the device
+spends almost all its time advertising and stays reconnectable; poll on a long
+base interval (180 s) with **exponential backoff** (to 30 min) while unreachable;
+and **hold last-known state** through a few failures rather than flapping. See
+`const.py` and [integration-plan](integration-plan.md).
+
 ## Recommendation
 
-1. **It will work today** through `aiosense-adu-main`, but reliability will be
-   marginal at −78…−88 dBm.
-2. For dependable control — and **before the second unit is installed** — place
-   or enable an ESPHome BLE proxy **physically nearer the machines** (ideally
-   line-of-sight, same room/exterior wall, < ~8 m). A dedicated ESP32 proxy at
-   the ADU exterior would move RSSI into the −60s and make GATT solid.
-3. Re-run `sources/ha-scan/ble_scan.py` (set `SCAN_SECONDS`, `FILTER=FG`) after
-   any proxy move to confirm which proxy now hears each unit and at what RSSI.
-   Aim for the strongest proxy to be the connection path for each machine.
-4. With two units, verify **each** is strongly heard by *some* proxy; HA will
-   pick the best scanner per device automatically once coverage exists.
+1. **It works today** through `aiosense-adu-main` at −78…−90 dBm — marginal, so
+   expect intermittent polls (the v0.1.4 backoff + hold-last-state design is
+   built for exactly this).
+2. A closer proxy is **not deployable** here (outdoors, nowhere to mount one), so
+   optimise the software for the weak link rather than chasing RSSI — done in
+   v0.1.4. If a mount ever becomes possible, an ESP32 proxy near the ADU exterior
+   would move RSSI into the −60s and make GATT solid.
+3. Re-run `sources/ha-scan/ble_scan.py` (set `SCAN_SECONDS`, `FILTER=FG`) to check
+   coverage. **Note:** disable/stop the integration first, or its held connection
+   will suppress the very advertisement you're scanning for.
+4. With two units, verify **each** is heard by *some* proxy; HA picks the best
+   scanner per device automatically.
 
 ## Live GATT probe attempt (2026-08-24) — blocked by VLAN, not by the device
 

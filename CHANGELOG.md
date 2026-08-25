@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-25
+
+### Changed
+
+- **Optimised for weak, single-proxy links** (no closer proxy is deployable).
+  Root cause found live: the device allows only one BLE central and **stops
+  advertising while connected**, so a persistently-held GATT link hid FG53850
+  from every proxy and blocked reconnection once the marginal link dropped.
+  - The client now **connects per poll and disconnects immediately**
+    (`disconnect_after=True`), so the device keeps advertising and stays
+    discoverable/reconnectable between polls.
+  - Base poll interval raised to 180 s; the coordinator applies **exponential
+    backoff** (up to 30 min) while the device is unreachable, and resets on the
+    next success.
+  - Entities **hold their last-known state** through up to 4 consecutive poll
+    failures instead of flapping to `unavailable` on an intermittent link.
+
 ## [0.1.3] - 2026-08-24
 
 ### Fixed

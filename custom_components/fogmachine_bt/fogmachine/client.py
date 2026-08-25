@@ -163,30 +163,58 @@ class FogMachineBLEClient:
         _LOGGER.debug("%s: <- %s", self._name, frame)
         return frame
 
-    async def _send(self, request: bytes, expect_response: bool, timeout: float) -> str:
+    async def _send(
+        self,
+        request: bytes,
+        expect_response: bool,
+        timeout: float,
+        disconnect_after: bool = False,
+    ) -> str:
         async with self._lock:
-            client = await self._ensure_connected()
-            return await self._txn(client, request, expect_response, timeout)
+            try:
+                client = await self._ensure_connected()
+                return await self._txn(client, request, expect_response, timeout)
+            finally:
+                # On a weak single-proxy link we release the connection slot after
+                # every operation so the device resumes advertising and stays
+                # discoverable/reconnectable (it stops advertising while a central
+                # is connected). See const.py / wiki/ha-proxy-coverage.md.
+                if disconnect_after:
+                    await self.disconnect()
 
     # -- high level ops --------------------------------------------------- #
     async def async_query(
-        self, timeout: float = DEFAULT_COMMAND_TIMEOUT
+        self,
+        timeout: float = DEFAULT_COMMAND_TIMEOUT,
+        disconnect_after: bool = True,
     ) -> p.FogMachineState:
-        """Read all device state (read-only)."""
-        frame = await self._send(p.build_query_all(), True, timeout)
+        """Read all device state (read-only). Disconnects after by default."""
+        frame = await self._send(
+            p.build_query_all(), True, timeout, disconnect_after=disconnect_after
+        )
         return p.parse_query_all(frame)
 
     async def async_set_power(
-        self, on: bool, timeout: float = DEFAULT_COMMAND_TIMEOUT
+        self,
+        on: bool,
+        timeout: float = DEFAULT_COMMAND_TIMEOUT,
+        disconnect_after: bool = True,
     ) -> None:
-        frame = await self._send(p.build_power(on), True, timeout)
+        frame = await self._send(
+            p.build_power(on), True, timeout, disconnect_after=disconnect_after
+        )
         _cmd, rc, _payload = p.parse_simple_response(frame)
         if rc != p.RC_OK:
             raise FogMachineError(f"{self._name}: power command rejected (rc={rc})")
 
     async def async_sync_clock(
-        self, now: datetime, timeout: float = DEFAULT_COMMAND_TIMEOUT
+        self,
+        now: datetime,
+        timeout: float = DEFAULT_COMMAND_TIMEOUT,
+        disconnect_after: bool = True,
     ) -> p.FogMachineState:
         """Push the device clock (production first-query form) and return state."""
-        frame = await self._send(p.build_first_query(now), True, timeout)
+        frame = await self._send(
+            p.build_first_query(now), True, timeout, disconnect_after=disconnect_after
+        )
         return p.parse_query_all(frame)
