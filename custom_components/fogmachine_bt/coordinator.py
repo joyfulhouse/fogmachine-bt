@@ -10,6 +10,7 @@ from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -88,12 +89,20 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
             raise UpdateFailed(str(err)) from err
 
     async def async_set_power(self, on: bool) -> None:
-        """Turn the fogger on/off, then refresh state."""
+        """Turn the fogger on/off and reflect the new state optimistically.
+
+        The device acknowledges the command (return code OK), so we trust it and
+        update state immediately. We deliberately do NOT re-query right away: on a
+        weak link the reconnect-and-read can return the device's stale pre-change
+        state and bounce the switch back. The next scheduled poll reconciles.
+        """
         try:
             await self._client.async_set_power(on)
         except (FogMachineError, BleakError) as err:
-            raise UpdateFailed(str(err)) from err
-        await self.async_request_refresh()
+            raise HomeAssistantError(str(err)) from err
+        if self.data is not None:
+            self.data.power_on = on
+            self.async_update_listeners()
 
     async def async_shutdown(self) -> None:
         await super().async_shutdown()

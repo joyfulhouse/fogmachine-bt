@@ -24,7 +24,15 @@ from .fogmachine.protocol import FogMachineState
 class FogMachineSensorDescription(SensorEntityDescription):
     """Describes a fog-machine sensor."""
 
-    value_fn: Callable[[FogMachineState], int | str | None]
+    value_fn: Callable[[FogMachineState], int | float | str | None]
+
+
+def _running_hours(s: FogMachineState) -> float | None:
+    # The device reports cumulative running time as HH:MM:SS; surface it in
+    # hours, which is the meaningful unit for an operating-time meter.
+    if s.running_seconds is None:
+        return None
+    return round(s.running_seconds / 3600, 2)
 
 
 SENSORS: tuple[FogMachineSensorDescription, ...] = (
@@ -32,9 +40,10 @@ SENSORS: tuple[FogMachineSensorDescription, ...] = (
         key="running_time",
         translation_key="running_time",
         device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        suggested_display_precision=2,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda s: s.running_seconds,
+        value_fn=_running_hours,
     ),
     FogMachineSensorDescription(
         key="mode",
@@ -68,6 +77,6 @@ class FogMachineSensor(FogMachineEntity, SensorEntity):
         self._attr_unique_id = f"{coordinator.address}_{description.key}"
 
     @property
-    def native_value(self) -> int | str | None:
+    def native_value(self) -> int | float | str | None:
         data = self.coordinator.data
         return None if data is None else self.entity_description.value_fn(data)
