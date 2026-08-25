@@ -78,7 +78,9 @@ class FogMachineBLEClient:
             # error 3 on write-without-response-only clones.
             char = client.services.get_characteristic(p.CHAR_UUID)
             props = list(char.properties) if char else []
-            self._write_response = "write-without-response" not in props and "write" in props
+            self._write_response = (
+                "write-without-response" not in props and "write" in props
+            )
             _LOGGER.debug(
                 "%s: FFE1 properties=%s -> write_response=%s",
                 self._name,
@@ -144,7 +146,9 @@ class FogMachineBLEClient:
         _LOGGER.debug("%s: -> %s", self._name, request)
         for i in range(0, len(request), p.WRITE_CHUNK):
             await client.write_gatt_char(
-                p.CHAR_UUID, request[i : i + p.WRITE_CHUNK], response=self._write_response
+                p.CHAR_UUID,
+                request[i : i + p.WRITE_CHUNK],
+                response=self._write_response,
             )
         if not expect_response:
             return ""

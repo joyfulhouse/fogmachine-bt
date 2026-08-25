@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.2] - 2026-08-24
+## [0.1.3] - 2026-08-24
 
 ### Fixed
 
-- Live-device fix: the FG53850's `FFE1` characteristic is **write-without-
-  response only**; writing with response returned GATT error 3 ("write not
+- Live-device fix (supersedes 0.1.2, which shipped unformatted): the FG53850's
+  `FFE1` characteristic is **write-without-response only**; writing with response returned GATT error 3 ("write not
   permitted") and left the entry in `setup_retry`. The client now selects the
   write type from the characteristic's advertised properties (prefers
   write-without-response). First confirmed live connection via an ESPHome proxy.
