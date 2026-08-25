@@ -104,6 +104,10 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
             self.data.power_on = on
             self.async_update_listeners()
 
+    async def async_explore(self) -> dict:
+        """Return a full BLE dump of the device (for diagnostics)."""
+        return await self._client.async_explore()
+
     async def async_shutdown(self) -> None:
         await super().async_shutdown()
         await self._client.disconnect()

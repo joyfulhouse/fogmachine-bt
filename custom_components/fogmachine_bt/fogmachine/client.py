@@ -218,3 +218,40 @@ class FogMachineBLEClient:
             p.build_first_query(now), True, timeout, disconnect_after=disconnect_after
         )
         return p.parse_query_all(frame)
+
+    async def async_explore(self, timeout: float = DEFAULT_COMMAND_TIMEOUT) -> dict:
+        """Dump everything the device exposes over BLE, for diagnostics.
+
+        Enumerates every GATT service + characteristic, reads every readable
+        characteristic (hex + ascii), and captures the raw query-all response.
+        Useful for discovering data the OEM app never surfaces (e.g. a water /
+        low-water status on a characteristic the app does not read).
+        """
+        async with self._lock:
+            client = await self._ensure_connected()
+            try:
+                services: list[dict] = []
+                for svc in client.services:
+                    chars: list[dict] = []
+                    for ch in svc.characteristics:
+                        props = list(ch.properties)
+                        entry: dict = {
+                            "uuid": str(ch.uuid),
+                            "handle": ch.handle,
+                            "properties": props,
+                        }
+                        if "read" in props:
+                            try:
+                                val = bytes(await client.read_gatt_char(ch))
+                                entry["value_hex"] = val.hex()
+                                entry["value_ascii"] = val.decode("latin1", "replace")
+                            except Exception as err:  # noqa: BLE001
+                                entry["read_error"] = f"{type(err).__name__}: {err}"
+                        chars.append(entry)
+                    services.append(
+                        {"service": str(svc.uuid), "characteristics": chars}
+                    )
+                raw = await self._txn(client, p.build_query_all(), True, timeout)
+                return {"services": services, "query_all_raw": raw}
+            finally:
+                await self.disconnect()

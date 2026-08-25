@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-25
+
+### Added
+
+- **Diagnostics** (Download diagnostics from the device page). Includes a full
+  live BLE dump: every GATT service/characteristic, the value of every readable
+  characteristic (hex + ascii), and the raw query-all response — useful for
+  discovering any device data the OEM app never surfaces (e.g. a water /
+  low-water status).
+
 ## [0.1.6] - 2026-08-25
 
 ### Fixed
