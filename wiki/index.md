@@ -35,8 +35,8 @@ ESPHome BLE proxies.
   [ha-proxy-coverage](ha-proxy-coverage.md).
 - Device state exposed over BLE: **power, cumulative running time, schedule
   windows, work/pause "frequency" cycles, weekdays, customization mode, clock.**
-  There is **no** water/temperature/humidity over BLE (those were Moogo-cloud
-  concepts; unrelated to this device).
+  There is **no** water/water-loss/temperature/humidity/error/battery over BLE —
+  verified by a live full-GATT dump. See [available-data](available-data.md).
 
 ## Pages
 
@@ -44,6 +44,7 @@ ESPHome BLE proxies.
 - [ble-transport](ble-transport.md) — GATT / connection / chunking / notifications
 - [ble-protocol](ble-protocol.md) — **the command spec** (authoritative)
 - [ha-proxy-coverage](ha-proxy-coverage.md) — proxy scan results + recommendations
+- [available-data](available-data.md) — **complete BLE data inventory** (live GATT dump); why "Water Loss" is not on BLE
 - [integration-plan](integration-plan.md) — HA integration architecture & entities (**Phase 1 built**)
 - [sources](sources.md) — raw evidence registry
 
