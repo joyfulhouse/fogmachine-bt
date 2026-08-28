@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Coroutine
+from collections.abc import Awaitable
 from datetime import timedelta
-from typing import Any
 
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakError
@@ -146,9 +145,7 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
     # A config write that silently fails must surface as an error, not lie
     # until the next poll.
 
-    async def _async_write_config(
-        self, write: Coroutine[Any, Any, FogMachineState]
-    ) -> None:
+    async def _async_write_config(self, write: Awaitable[FogMachineState]) -> None:
         """Run a verified client write and adopt the read-back state."""
         try:
             state = await write

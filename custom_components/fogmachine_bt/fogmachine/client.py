@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from collections.abc import Callable
 from datetime import datetime
 
@@ -235,7 +234,7 @@ class FogMachineBLEClient:
 
         Requires the device ack (rc OK), re-queries the full state and checks
         that the affected field actually changed. On mismatch the read is
-        retried once after ~``VERIFY_RETRY_DELAY``; if the device still reports
+        retried once after ``VERIFY_RETRY_DELAY``; if the device still reports
         the old value, raises :class:`FogMachineError`. The caller always gets
         the freshly-read device state — never an optimistic guess — so config
         writes that silently fail surface as errors. Disconnects when done
@@ -250,20 +249,15 @@ class FogMachineBLEClient:
                     raise FogMachineError(
                         f"{self._name}: {describe} rejected by device (rc={rc})"
                     )
-                state = p.parse_query_all(
-                    await self._txn(client, p.build_query_all(), True, timeout)
-                )
-                if verify(state):
-                    return state
                 # The firmware may need a beat to commit; retry the read once.
-                resume_at = time.monotonic() + VERIFY_RETRY_DELAY
-                while (remaining := resume_at - time.monotonic()) > 0:
-                    await asyncio.sleep(remaining)
-                state = p.parse_query_all(
-                    await self._txn(client, p.build_query_all(), True, timeout)
-                )
-                if verify(state):
-                    return state
+                for attempt in range(2):
+                    if attempt:
+                        await asyncio.sleep(VERIFY_RETRY_DELAY)
+                    state = p.parse_query_all(
+                        await self._txn(client, p.build_query_all(), True, timeout)
+                    )
+                    if verify(state):
+                        return state
                 raise FogMachineError(
                     f"{self._name}: {describe} was acked but is not reflected "
                     "in the device state after read-back"
