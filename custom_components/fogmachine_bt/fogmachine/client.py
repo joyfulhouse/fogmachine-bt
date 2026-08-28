@@ -21,6 +21,9 @@ from . import protocol as p
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_COMMAND_TIMEOUT = 15.0
+# Delay before the single read-back retry when a verified config write is not
+# yet reflected in the device state (the firmware may commit asynchronously).
+VERIFY_RETRY_DELAY = 1.0
 
 
 class FogMachineError(Exception):
@@ -218,6 +221,135 @@ class FogMachineBLEClient:
             p.build_first_query(now), True, timeout, disconnect_after=disconnect_after
         )
         return p.parse_query_all(frame)
+
+    # -- verified config writes ------------------------------------------- #
+    async def _write_verified(
+        self,
+        request: bytes,
+        describe: str,
+        verify: Callable[[p.FogMachineState], bool],
+        timeout: float,
+    ) -> p.FogMachineState:
+        """Write a config frame, then read the state back on the SAME connection.
+
+        Requires the device ack (rc OK), re-queries the full state and checks
+        that the affected field actually changed. On mismatch the read is
+        retried once after ``VERIFY_RETRY_DELAY``; if the device still reports
+        the old value, raises :class:`FogMachineError`. The caller always gets
+        the freshly-read device state — never an optimistic guess — so config
+        writes that silently fail surface as errors. Disconnects when done
+        (weak-link policy, see ``_send``).
+        """
+        async with self._lock:
+            try:
+                client = await self._ensure_connected()
+                frame = await self._txn(client, request, True, timeout)
+                cmd, rc, _payload = p.parse_simple_response(frame)
+                # The ack must be for the command we sent: a stale/foreign ack
+                # with rc OK must not false-pass (even if a later read-back
+                # coincidentally matches the intent).
+                expected_cmd = chr(request[3])  # EE <phase> <cmdId> <code> ...
+                if cmd != expected_cmd:
+                    raise FogMachineError(
+                        f"{self._name}: {describe} ack was for command {cmd!r}, "
+                        f"expected {expected_cmd!r}"
+                    )
+                if rc != p.RC_OK:
+                    raise FogMachineError(
+                        f"{self._name}: {describe} rejected by device (rc={rc})"
+                    )
+                # The firmware may need a beat to commit; retry the read once.
+                for attempt in range(2):
+                    if attempt:
+                        await asyncio.sleep(VERIFY_RETRY_DELAY)
+                    state = p.parse_query_all(
+                        await self._txn(client, p.build_query_all(), True, timeout)
+                    )
+                    if verify(state):
+                        return state
+                raise FogMachineError(
+                    f"{self._name}: {describe} was acked but is not reflected "
+                    "in the device state after read-back"
+                )
+            finally:
+                await self.disconnect()
+
+    async def async_set_mode(
+        self, mode_char: str, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
+        """Set customization mode (cmd 2) and verify via read-back."""
+        return await self._write_verified(
+            p.build_mode(mode_char),
+            f"mode={p.MODE_NAMES.get(mode_char, mode_char)}",
+            lambda st: st.mode == p.MODE_NAMES.get(mode_char),
+            timeout,
+        )
+
+    async def async_set_weekday(
+        self, day_index: int, on: bool, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
+        """Set one scheduled weekday (cmd 3) and verify via read-back."""
+        return await self._write_verified(
+            p.build_weekday(day_index, on),
+            f"weekday[{day_index}]={'on' if on else 'off'}",
+            lambda st: (
+                st.weekdays is not None
+                and len(st.weekdays) > day_index
+                and st.weekdays[day_index] == on
+            ),
+            timeout,
+        )
+
+    async def async_set_time_entry(
+        self, entry: p.TimeEntry, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
+        """Set a whole schedule window entry (cmd 6) and verify via read-back."""
+        return await self._write_verified(
+            p.build_time_entry(
+                entry.seq,
+                entry.enabled,
+                entry.from_h,
+                entry.from_m,
+                entry.to_h,
+                entry.to_m,
+            ),
+            f"time window {entry.seq}",
+            lambda st: st.time_entries.get(entry.seq) == entry,
+            timeout,
+        )
+
+    async def async_set_freq_entry(
+        self, entry: p.FreqEntry, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
+        """Set a whole work/pause cycle entry (cmd 7) and verify via read-back."""
+        return await self._write_verified(
+            p.build_freq_entry(entry.seq, entry.enabled, entry.work_s, entry.pause_s),
+            f"freq cycle {entry.seq}",
+            lambda st: st.freq_entries.get(entry.seq) == entry,
+            timeout,
+        )
+
+    async def async_set_time_customizable(
+        self, on: bool, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
+        """Toggle schedule-time customization (cmd 4) and verify via read-back."""
+        return await self._write_verified(
+            p.build_time_customizable(on),
+            f"time_customizable={on}",
+            lambda st: st.time_customizable == on,
+            timeout,
+        )
+
+    async def async_set_freq_customizable(
+        self, on: bool, timeout: float = DEFAULT_COMMAND_TIMEOUT
+    ) -> p.FogMachineState:
+        """Toggle frequency customization (cmd 5) and verify via read-back."""
+        return await self._write_verified(
+            p.build_freq_customizable(on),
+            f"freq_customizable={on}",
+            lambda st: st.freq_customizable == on,
+            timeout,
+        )
 
     async def async_explore(self, timeout: float = DEFAULT_COMMAND_TIMEOUT) -> dict:
         """Dump everything the device exposes over BLE, for diagnostics.
