@@ -61,6 +61,7 @@ MODE_ALWAYS = "0"
 MODE_NIMBLE = "1"
 MODE_ADVANCED = "2"
 MODE_NAMES = {MODE_ALWAYS: "always", MODE_NIMBLE: "nimble", MODE_ADVANCED: "advanced"}
+MODE_CHARS = {name: char for char, name in MODE_NAMES.items()}
 
 
 class ProtocolError(Exception):
@@ -111,6 +112,25 @@ class FogMachineState:
 # --------------------------------------------------------------------------- #
 #  Request builders
 # --------------------------------------------------------------------------- #
+def _require_bool(name: str, value: bool) -> None:
+    """Wire safety: inverted-boolean fields accept only real bools."""
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a bool, got {value!r}")
+
+
+def _require_int(name: str, value: int, lo: int, hi: int) -> None:
+    """Wire safety: numeric fields must be ints that fit their fixed width.
+
+    Rejects bools (subclass of int), negatives (a ``-`` would corrupt the
+    fixed-width ASCII field) and overflow. Semantic app-level limits (hours
+    0-23, work 3-84600 s, ...) are the caller's job, not the wire format's.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an int, got {value!r}")
+    if not lo <= value <= hi:
+        raise ValueError(f"{name} must be {lo}..{hi}, got {value}")
+
+
 def build_request(cmd_id: str, payload: str = "") -> bytes:
     """Build a request frame: ``EE`` + ``0`` + cmd_id + ``0`` + payload + ``.``."""
     return f"{HEADER}{PHASE_REQUEST}{cmd_id}{REQUEST_CODE}{payload}{END}".encode(
@@ -162,8 +182,8 @@ def build_datetime_sync(now: datetime) -> bytes:
 
 def build_weekday(day_index: int, on: bool) -> bytes:
     """Enable/disable a single scheduled weekday (cmd 3). day_index 0=Mon..6=Sun."""
-    if not 0 <= day_index <= 6:
-        raise ValueError("day_index must be 0..6")
+    _require_int("day_index", day_index, 0, 6)
+    _require_bool("on", on)
     return build_request(CMD_WEEKDAY, f"{day_index}{ON if on else OFF}")
 
 
@@ -175,7 +195,15 @@ def build_mode(mode_char: str) -> bytes:
 
 
 def build_freq_entry(seq: int, enabled: bool, work_s: int, pause_s: int) -> bytes:
-    """Set a freq (work/pause) entry (cmd 7). 13-char payload."""
+    """Set a freq (work/pause) entry (cmd 7). 13-char payload.
+
+    Bounds here are wire-width only; app-level limits (work 3-84600 s,
+    pause 5-84600 s) are enforced by the caller.
+    """
+    _require_int("seq", seq, 0, 99)
+    _require_bool("enabled", enabled)
+    _require_int("work_s", work_s, 0, 99999)
+    _require_int("pause_s", pause_s, 0, 99999)
     payload = f"{seq:02d}{ON if enabled else OFF}{work_s:05d}{pause_s:05d}"
     if len(payload) != 13:
         raise ValueError(f"freq payload must be 13 chars, got {payload!r}")
@@ -185,13 +213,38 @@ def build_freq_entry(seq: int, enabled: bool, work_s: int, pause_s: int) -> byte
 def build_time_entry(
     seq: int, enabled: bool, from_h: int, from_m: int, to_h: int, to_m: int
 ) -> bytes:
-    """Set a schedule time window (cmd 6). 11-char payload."""
+    """Set a schedule time window (cmd 6). 11-char payload.
+
+    Bounds here are wire-width only; app-level limits (hours 0-23,
+    minutes 0-59, window edges) are enforced by the caller.
+    """
+    _require_int("seq", seq, 0, 99)
+    _require_bool("enabled", enabled)
+    for name, value in (
+        ("from_h", from_h),
+        ("from_m", from_m),
+        ("to_h", to_h),
+        ("to_m", to_m),
+    ):
+        _require_int(name, value, 0, 99)
     payload = (
         f"{seq:02d}{ON if enabled else OFF}{from_h:02d}{from_m:02d}{to_h:02d}{to_m:02d}"
     )
     if len(payload) != 11:
         raise ValueError(f"time payload must be 11 chars, got {payload!r}")
     return build_request(CMD_TIME_CUSTOMIZE, payload)
+
+
+def build_time_customizable(on: bool) -> bytes:
+    """Enable/disable schedule-time customization (cmd 4). Inverted bool payload."""
+    _require_bool("on", on)
+    return build_request(CMD_TIME_CUSTOMIZABLE, ON if on else OFF)
+
+
+def build_freq_customizable(on: bool) -> bytes:
+    """Enable/disable frequency customization (cmd 5). Inverted bool payload."""
+    _require_bool("on", on)
+    return build_request(CMD_FREQ_CUSTOMIZABLE, ON if on else OFF)
 
 
 # --------------------------------------------------------------------------- #
