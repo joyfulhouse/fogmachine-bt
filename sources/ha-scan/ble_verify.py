@@ -239,13 +239,12 @@ class ProxyLink:
         self.addr = addr
         self.handle = ffe1_handle
         self.buf = bytearray()
-        self.expected_terms = 1
         self.done = asyncio.Event()
 
     def on_notify(self, handle, data) -> None:
         self.buf.extend(data)
         show_bytes("NOTIFY chunk", bytes(data))
-        if self.buf.count(b".") >= self.expected_terms:
+        if b"." in self.buf:
             self.done.set()
 
     async def request(self, frame: bytes, label: str) -> bytes:
@@ -274,7 +273,7 @@ class ProxyLink:
         return raw
 
 
-async def connect_link(host: str, psk: str, mac: str) -> tuple[object, ProxyLink]:
+async def connect_link(host: str, psk: str, mac: str) -> ProxyLink:
     from aioesphomeapi import APIClient
 
     addr = int(mac.upper().replace(":", ""), 16)
@@ -354,12 +353,12 @@ async def connect_link(host: str, psk: str, mac: str) -> tuple[object, ProxyLink
     link = ProxyLink(cli, addr, ffe1)
     await cli.bluetooth_gatt_start_notify(addr, ffe1, link.on_notify)
     print("notifications enabled on FFE1")
-    return cli, link
+    return link
 
 
 async def query_all(link: ProxyLink):
     raw = await link.request(P.build_query_all(), "query-all EE000.")
-    return P.parse_query_all(raw), raw
+    return P.parse_query_all(raw)
 
 
 # --------------------------------------------------------------------------- #
@@ -461,7 +460,7 @@ async def run_live(args: argparse.Namespace) -> int:
     psk = os.environ["ESPHOME_NOISE_PSK"]
     mac = os.environ["TARGET_MAC"]
 
-    cli, link = await connect_link(host, psk, mac)
+    link = await connect_link(host, psk, mac)
     try:
         # protocol init handshake, exactly like the OEM app after discovery
         raw = await link.request(P.build_connect(), "connect EE0c0.")
@@ -471,7 +470,7 @@ async def run_live(args: argparse.Namespace) -> int:
             return 1
 
         # ALWAYS read + print full state first
-        st, _ = await query_all(link)
+        st = await query_all(link)
         print_state(st)
 
         if not steps:
@@ -513,7 +512,7 @@ async def run_live(args: argparse.Namespace) -> int:
                 failures += 1
                 break
             # same-connection read-back + diff
-            st_after, _ = await query_all(link)
+            st_after = await query_all(link)
             real, expect = diff_states(st, st_after)
             for line in expect:
                 print(f"  diff (ok): {line}")
@@ -537,8 +536,8 @@ async def run_live(args: argparse.Namespace) -> int:
         return 1 if failures else 0
     finally:
         with contextlib.suppress(Exception):
-            await cli.bluetooth_device_disconnect(link.addr)
-        await cli.disconnect()
+            await link.cli.bluetooth_device_disconnect(link.addr)
+        await link.cli.disconnect()
 
 
 def main() -> int:
