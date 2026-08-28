@@ -244,7 +244,16 @@ class FogMachineBLEClient:
             try:
                 client = await self._ensure_connected()
                 frame = await self._txn(client, request, True, timeout)
-                _cmd, rc, _payload = p.parse_simple_response(frame)
+                cmd, rc, _payload = p.parse_simple_response(frame)
+                # The ack must be for the command we sent: a stale/foreign ack
+                # with rc OK must not false-pass (even if a later read-back
+                # coincidentally matches the intent).
+                expected_cmd = chr(request[3])  # EE <phase> <cmdId> <code> ...
+                if cmd != expected_cmd:
+                    raise FogMachineError(
+                        f"{self._name}: {describe} ack was for command {cmd!r}, "
+                        f"expected {expected_cmd!r}"
+                    )
                 if rc != p.RC_OK:
                     raise FogMachineError(
                         f"{self._name}: {describe} rejected by device (rc={rc})"

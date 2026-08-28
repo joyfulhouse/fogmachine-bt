@@ -85,7 +85,12 @@ async def test_set_mode_success_write_then_verify_on_same_connection():
 
 
 async def test_set_mode_mismatch_retries_read_once_then_succeeds(monkeypatch):
-    monkeypatch.setattr(client_mod, "VERIFY_RETRY_DELAY", 0.0)
+    sleeps: list[float] = []
+
+    async def _recording_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(client_mod.asyncio, "sleep", _recording_sleep)
     client = _make_client()
     link = ScriptedLink(
         client,
@@ -98,6 +103,8 @@ async def test_set_mode_mismatch_retries_read_once_then_succeeds(monkeypatch):
     state = await client.async_set_mode(p.MODE_ADVANCED)
     assert state.mode == "advanced"
     assert link.requests == [b"EE0202.", b"EE000.", b"EE000."]
+    # the retry pause is real: exactly one sleep of VERIFY_RETRY_DELAY
+    assert sleeps == [client_mod.VERIFY_RETRY_DELAY]
     assert link.disconnects == 1
 
 
@@ -115,6 +122,19 @@ async def test_set_mode_persistent_mismatch_raises(monkeypatch):
     with pytest.raises(FogMachineError):
         await client.async_set_mode(p.MODE_ADVANCED)
     assert len(link.requests) == 3  # write + two read-backs, then give up
+    assert link.disconnects == 1
+
+
+async def test_ack_for_wrong_command_raises_even_if_read_back_matches():
+    client = _make_client()
+    # A stale power ack (rc 0) arrives instead of the mode ack; the read-back
+    # would coincidentally match the intent — it must still raise.
+    link = ScriptedLink(
+        client, [_ack(p.CMD_POWER), _query_reply(mode_char=p.MODE_ADVANCED)]
+    )
+    with pytest.raises(FogMachineError):
+        await client.async_set_mode(p.MODE_ADVANCED)
+    assert link.requests == [b"EE0202."]  # no read-back after a mismatched ack
     assert link.disconnects == 1
 
 

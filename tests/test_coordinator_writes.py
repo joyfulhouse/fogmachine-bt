@@ -8,6 +8,7 @@ with the freshly-read device state (no optimistic patching).
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -87,6 +88,13 @@ async def test_set_mode_rejects_unknown_name():
     for bad in ("turbo", "", "Always", 0, None):
         with pytest.raises(ServiceValidationError):
             await coordinator.async_set_mode(bad)
+    assert fake.calls == []
+
+
+async def test_set_mode_rejects_unhashable_value():
+    coordinator, fake = _make()
+    with pytest.raises(ServiceValidationError):
+        await coordinator.async_set_mode(["always"])  # unhashable, non-str
     assert fake.calls == []
 
 
@@ -226,6 +234,74 @@ async def test_set_cycle_partial_delta_without_known_entry_errors():
     with pytest.raises(HomeAssistantError):
         await coordinator.async_set_cycle(3, work_s=30)
     assert fake.calls == []
+
+
+# --- concurrent partial merges (read-modify-write must be atomic) ----------- #
+class StatefulFakeClient:
+    """Applies whole-entry writes to a device-side state and returns it fresh.
+
+    The await point mimics real BLE I/O, so concurrent coordinator calls can
+    interleave — exactly the window the config-write lock must close.
+    """
+
+    def __init__(self, initial: p.FogMachineState) -> None:
+        self.device = initial
+
+    async def async_set_time_entry(self, entry: p.TimeEntry) -> p.FogMachineState:
+        await asyncio.sleep(0)
+        self.device = p.FogMachineState(
+            time_entries={**self.device.time_entries, entry.seq: entry},
+            freq_entries=dict(self.device.freq_entries),
+        )
+        return self.device
+
+    async def async_set_freq_entry(self, entry: p.FreqEntry) -> p.FogMachineState:
+        await asyncio.sleep(0)
+        self.device = p.FogMachineState(
+            time_entries=dict(self.device.time_entries),
+            freq_entries={**self.device.freq_entries, entry.seq: entry},
+        )
+        return self.device
+
+
+async def test_concurrent_partial_window_updates_are_not_lost():
+    coordinator, _ = _make()
+    fake = StatefulFakeClient(
+        p.FogMachineState(
+            time_entries={
+                1: p.TimeEntry(
+                    seq=1, enabled=True, from_h=6, from_m=0, to_h=22, to_m=30
+                )
+            }
+        )
+    )
+    coordinator._client = fake
+    coordinator.data = fake.device
+    await asyncio.gather(
+        coordinator.async_set_window(1, from_hm=(7, 15)),
+        coordinator.async_set_window(1, to_hm=(21, 45)),
+    )
+    final = coordinator.data.time_entries[1]
+    assert (final.from_h, final.from_m) == (7, 15)
+    assert (final.to_h, final.to_m) == (21, 45)
+
+
+async def test_concurrent_partial_cycle_updates_are_not_lost():
+    coordinator, _ = _make()
+    fake = StatefulFakeClient(
+        p.FogMachineState(
+            freq_entries={1: p.FreqEntry(seq=1, enabled=True, work_s=10, pause_s=20)}
+        )
+    )
+    coordinator._client = fake
+    coordinator.data = fake.device
+    await asyncio.gather(
+        coordinator.async_set_cycle(1, work_s=30),
+        coordinator.async_set_cycle(1, pause_s=40),
+    )
+    final = coordinator.data.freq_entries[1]
+    assert final.work_s == 30
+    assert final.pause_s == 40
 
 
 # --- customizable toggles (cmd 4/5) ---------------------------------------- #

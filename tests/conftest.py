@@ -10,6 +10,7 @@ by ``tests/_import_check.py`` / ``tests/_import_smoke.py``.
 from __future__ import annotations
 
 import enum
+import importlib.util
 import os
 import sys
 import types
@@ -27,8 +28,8 @@ def _register(name: str) -> types.ModuleType:
 
 
 def _install_homeassistant_stubs() -> None:
-    if "homeassistant" in sys.modules:  # a real HA install takes precedence
-        return
+    if importlib.util.find_spec("homeassistant") is not None:
+        return  # a real HA install is present — use it, never shadow it
 
     ha = _register("homeassistant")
 

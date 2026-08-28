@@ -32,9 +32,11 @@ MAX_BACKOFF_INTERVAL = 1800  # cap for exponential backoff on repeated failure
 FAILURES_BEFORE_UNAVAILABLE = 4
 
 # --- config-write validation limits (choke point: coordinator) ---
-# Mirror the OEM app's input limits (wiki/ble-protocol.md): spray duty cycle
-# work 3–84600 s / pause 5–84600 s; schedule windows start no later than 23:58
-# and end no earlier than 00:01. Out-of-range values are rejected, never clamped.
+# Mirror the OEM app's input limits: spray duty cycle work 3–84600 s / pause
+# 5–84600 s (wiki/ble-protocol.md); schedule windows start no later than 23:58
+# and end no earlier than 00:01 (sources/codex-analysis/PROTOCOL_CODEX.md,
+# CustomizedTime.adjustFromTime()/adjustToTime()). Out-of-range values are
+# rejected, never clamped.
 MIN_WORK_SECONDS = 3
 MAX_WORK_SECONDS = 84600
 MIN_PAUSE_SECONDS = 5

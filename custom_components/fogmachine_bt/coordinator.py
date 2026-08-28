@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable
 from datetime import timedelta
@@ -84,6 +85,9 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
         self.address = address
         self._client = FogMachineBLEClient(self._get_device, entry.title or address)
         self._failures = 0
+        # Serialises config writes so a cmd 6/7 partial-delta merge cannot
+        # read self.data while another write is in flight (lost update).
+        self._config_lock = asyncio.Lock()
 
     def _get_device(self) -> BLEDevice | None:
         return bluetooth.async_ble_device_from_address(
@@ -144,9 +148,18 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
     # not stick; the coordinator then adopts the freshly-read device state.
     # A config write that silently fails must surface as an error, not lie
     # until the next poll.
+    #
+    # Every setter holds self._config_lock across its whole read-merge ->
+    # write+verify -> adopt-read-back sequence, making read-modify-write
+    # atomic per device: without it, two concurrent partial updates to the
+    # same window/cycle would both merge against stale self.data and silently
+    # lose one of the changes (each whole-entry write still verify-passes).
 
     async def _async_write_config(self, write: Awaitable[FogMachineState]) -> None:
-        """Run a verified client write and adopt the read-back state."""
+        """Run a verified client write and adopt the read-back state.
+
+        Caller must hold ``self._config_lock``.
+        """
         try:
             state = await write
         except (FogMachineError, BleakError) as err:
@@ -155,17 +168,23 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
 
     async def async_set_mode(self, mode: str) -> None:
         """Set the customization mode: 'always' | 'nimble' | 'advanced'."""
-        if mode not in MODE_CHARS:
+        if not isinstance(mode, str) or mode not in MODE_CHARS:
             raise ServiceValidationError(
                 f"mode must be one of {sorted(MODE_CHARS)}, got {mode!r}"
             )
-        await self._async_write_config(self._client.async_set_mode(MODE_CHARS[mode]))
+        async with self._config_lock:
+            await self._async_write_config(
+                self._client.async_set_mode(MODE_CHARS[mode])
+            )
 
     async def async_set_weekday(self, day_idx: int, enabled: bool) -> None:
         """Enable/disable one scheduled weekday (0=Monday .. 6=Sunday)."""
         _validated_int("day_idx", day_idx, 0, 6)
         _validated_bool("enabled", enabled)
-        await self._async_write_config(self._client.async_set_weekday(day_idx, enabled))
+        async with self._config_lock:
+            await self._async_write_config(
+                self._client.async_set_weekday(day_idx, enabled)
+            )
 
     async def async_set_window(
         self,
@@ -180,42 +199,46 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
         merged with the last-polled entry before building the frame.
         """
         _validated_int("seq", seq, 0, 99)
-        current = self.data.time_entries.get(seq) if self.data else None
-        if (from_hm is None or to_hm is None or enabled is None) and current is None:
-            raise HomeAssistantError(
-                f"window {seq}: partial update requested but the current entry "
-                "is unknown (device not polled yet)"
+        async with self._config_lock:
+            current = self.data.time_entries.get(seq) if self.data else None
+            if (
+                from_hm is None or to_hm is None or enabled is None
+            ) and current is None:
+                raise HomeAssistantError(
+                    f"window {seq}: partial update requested but the current "
+                    "entry is unknown (device not polled yet)"
+                )
+            if from_hm is None:
+                from_h, from_m = current.from_h, current.from_m
+            else:
+                from_h, from_m = _validated_hm("from", from_hm)
+            if to_hm is None:
+                to_h, to_m = current.to_h, current.to_m
+            else:
+                to_h, to_m = _validated_hm("to", to_hm)
+            if enabled is not None:
+                _validated_bool("enabled", enabled)
+            else:
+                enabled = current.enabled
+            if from_h * 60 + from_m > MAX_WINDOW_FROM_MINUTES:
+                raise ServiceValidationError(
+                    "window start must be no later than 23:58, "
+                    f"got {from_h:02d}:{from_m:02d}"
+                )
+            if to_h * 60 + to_m < MIN_WINDOW_TO_MINUTES:
+                raise ServiceValidationError(
+                    "window end must be no earlier than 00:01, "
+                    f"got {to_h:02d}:{to_m:02d}"
+                )
+            entry = TimeEntry(
+                seq=seq,
+                enabled=enabled,
+                from_h=from_h,
+                from_m=from_m,
+                to_h=to_h,
+                to_m=to_m,
             )
-        if from_hm is None:
-            from_h, from_m = current.from_h, current.from_m
-        else:
-            from_h, from_m = _validated_hm("from", from_hm)
-        if to_hm is None:
-            to_h, to_m = current.to_h, current.to_m
-        else:
-            to_h, to_m = _validated_hm("to", to_hm)
-        if enabled is not None:
-            _validated_bool("enabled", enabled)
-        else:
-            enabled = current.enabled
-        if from_h * 60 + from_m > MAX_WINDOW_FROM_MINUTES:
-            raise ServiceValidationError(
-                "window start must be no later than 23:58, "
-                f"got {from_h:02d}:{from_m:02d}"
-            )
-        if to_h * 60 + to_m < MIN_WINDOW_TO_MINUTES:
-            raise ServiceValidationError(
-                f"window end must be no earlier than 00:01, got {to_h:02d}:{to_m:02d}"
-            )
-        entry = TimeEntry(
-            seq=seq,
-            enabled=enabled,
-            from_h=from_h,
-            from_m=from_m,
-            to_h=to_h,
-            to_m=to_m,
-        )
-        await self._async_write_config(self._client.async_set_time_entry(entry))
+            await self._async_write_config(self._client.async_set_time_entry(entry))
 
     async def async_set_cycle(
         self,
@@ -230,40 +253,45 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
         merged with the last-polled entry before building the frame.
         """
         _validated_int("seq", seq, 0, 99)
-        current = self.data.freq_entries.get(seq) if self.data else None
-        if (work_s is None or pause_s is None or enabled is None) and current is None:
-            raise HomeAssistantError(
-                f"cycle {seq}: partial update requested but the current entry "
-                "is unknown (device not polled yet)"
-            )
-        if work_s is not None:
-            _validated_int("work_s", work_s, MIN_WORK_SECONDS, MAX_WORK_SECONDS)
-        else:
-            work_s = current.work_s
-        if pause_s is not None:
-            _validated_int("pause_s", pause_s, MIN_PAUSE_SECONDS, MAX_PAUSE_SECONDS)
-        else:
-            pause_s = current.pause_s
-        if enabled is not None:
-            _validated_bool("enabled", enabled)
-        else:
-            enabled = current.enabled
-        entry = FreqEntry(seq=seq, enabled=enabled, work_s=work_s, pause_s=pause_s)
-        await self._async_write_config(self._client.async_set_freq_entry(entry))
+        async with self._config_lock:
+            current = self.data.freq_entries.get(seq) if self.data else None
+            if (
+                work_s is None or pause_s is None or enabled is None
+            ) and current is None:
+                raise HomeAssistantError(
+                    f"cycle {seq}: partial update requested but the current "
+                    "entry is unknown (device not polled yet)"
+                )
+            if work_s is not None:
+                _validated_int("work_s", work_s, MIN_WORK_SECONDS, MAX_WORK_SECONDS)
+            else:
+                work_s = current.work_s
+            if pause_s is not None:
+                _validated_int("pause_s", pause_s, MIN_PAUSE_SECONDS, MAX_PAUSE_SECONDS)
+            else:
+                pause_s = current.pause_s
+            if enabled is not None:
+                _validated_bool("enabled", enabled)
+            else:
+                enabled = current.enabled
+            entry = FreqEntry(seq=seq, enabled=enabled, work_s=work_s, pause_s=pause_s)
+            await self._async_write_config(self._client.async_set_freq_entry(entry))
 
     async def async_set_time_customizable(self, enabled: bool) -> None:
         """Enable/disable the schedule-time customization feature (cmd 4)."""
         _validated_bool("enabled", enabled)
-        await self._async_write_config(
-            self._client.async_set_time_customizable(enabled)
-        )
+        async with self._config_lock:
+            await self._async_write_config(
+                self._client.async_set_time_customizable(enabled)
+            )
 
     async def async_set_freq_customizable(self, enabled: bool) -> None:
         """Enable/disable the frequency customization feature (cmd 5)."""
         _validated_bool("enabled", enabled)
-        await self._async_write_config(
-            self._client.async_set_freq_customizable(enabled)
-        )
+        async with self._config_lock:
+            await self._async_write_config(
+                self._client.async_set_freq_customizable(enabled)
+            )
 
     async def async_explore(self) -> dict:
         """Return a full BLE dump of the device (for diagnostics)."""
