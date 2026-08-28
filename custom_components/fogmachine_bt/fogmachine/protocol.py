@@ -205,8 +205,6 @@ def build_freq_entry(seq: int, enabled: bool, work_s: int, pause_s: int) -> byte
     _require_int("work_s", work_s, 0, 99999)
     _require_int("pause_s", pause_s, 0, 99999)
     payload = f"{seq:02d}{ON if enabled else OFF}{work_s:05d}{pause_s:05d}"
-    if len(payload) != 13:
-        raise ValueError(f"freq payload must be 13 chars, got {payload!r}")
     return build_request(CMD_FREQ_CUSTOMIZE, payload)
 
 
@@ -230,8 +228,6 @@ def build_time_entry(
     payload = (
         f"{seq:02d}{ON if enabled else OFF}{from_h:02d}{from_m:02d}{to_h:02d}{to_m:02d}"
     )
-    if len(payload) != 11:
-        raise ValueError(f"time payload must be 11 chars, got {payload!r}")
     return build_request(CMD_TIME_CUSTOMIZE, payload)
 
 
