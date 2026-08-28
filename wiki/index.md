@@ -17,6 +17,7 @@ ESPHome BLE proxies.
 | Reachable over an HA Bluetooth proxy | ✅ yes (often marginal RSSI) — see [ha-proxy-coverage](ha-proxy-coverage.md) |
 | HA custom integration (protocol + switch/sensor) | ✅ built; 12 unit tests + HA-import check pass |
 | Live validation on real device | ✅ done — connect → query decoded (power/mode/running-time). Live fixes folded in: FFE0-only matcher, FFE1 write-without-response, connect-per-poll for weak links. |
+| Live verification of set-writes (cmd 2–7) | 🧰 tooling ready, ⚠️ awaiting human-run gate — probe `sources/ha-scan/ble_verify.py` + checklist [live-verify](live-verify.md). No set-write has been sent to a live unit yet; control entities stay blocked until this passes. |
 
 ## The 30-second summary
 
@@ -46,6 +47,7 @@ ESPHome BLE proxies.
 - [ha-proxy-coverage](ha-proxy-coverage.md) — proxy scan results + recommendations
 - [available-data](available-data.md) — **complete BLE data inventory** (live GATT dump); why "Water Loss" is not on BLE
 - [integration-plan](integration-plan.md) — HA integration architecture & entities (**Phase 1 built**)
+- [live-verify](live-verify.md) — **human-run safety gate** for the cmd 2–7 set-writes (checklist + evidence log)
 - [sources](sources.md) — raw evidence registry
 
 ## The integration
