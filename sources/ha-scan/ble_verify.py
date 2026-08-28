@@ -25,12 +25,15 @@ ascending blast-radius order regardless of flag order):
   --noop-time-entry   cmd 6  re-send the lowest-seq time window verbatim
   --noop-freq-entry   cmd 7  re-send the lowest-seq freq cycle verbatim
 
-Every write step: read current value -> build the identical frame -> print raw
-request bytes -> send -> print raw response + parsed (cmd id, rc) -> re-query
-all -> DIFF against the pre-write state and fail on any change (the device
-clock advancing is expected and reported separately). All writes REFUSE to run
-unless power (cmd 1) reads OFF. Any rc != 0 or unexpected diff aborts the
-remaining steps.
+Every write step: interactive typed-YES confirmation FIRST -> then a FRESH
+query-all on the same connection (the device may have changed during the human
+pause) -> assert power (cmd 1) reads OFF, else the WHOLE run aborts -> rebuild
+the identical no-op frame from that fresh state -> print raw request bytes ->
+send -> print raw response + parsed (cmd id, rc) -> re-query all -> DIFF
+against the fresh pre-write state and fail on any change (the device clock
+advancing is expected and reported separately). Any rc != 0 or unexpected diff
+aborts the remaining steps. There is no non-interactive override: writes
+require a TTY and a typed ``YES`` each.
 
 Offline paths (no hardware, no env needed):
   --dry-run             print the step plan and frame templates, connect nothing
@@ -180,7 +183,10 @@ def build_noop_frame(step: str, st) -> bytes:
         if st.mode is None:
             raise StepError("device did not report a mode (query sub 2 missing)")
         mode_char = {v: k for k, v in P.MODE_NAMES.items()}.get(st.mode, st.mode)
-        return P.build_mode(mode_char)
+        try:
+            return P.build_mode(mode_char)
+        except ValueError as err:
+            raise StepError(f"device reported unknown mode {st.mode!r}") from err
     if step == "weekday":
         if not st.weekdays:
             raise StepError("device did not report weekdays (query sub 3 missing)")
@@ -395,12 +401,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     ap.add_argument(
         "--confirm-writes", action="store_true",
-        help="required with any --noop-* flag; without it every write is refused",
-    )
-    ap.add_argument(
-        "--yes", action="store_true",
-        help="skip the interactive per-write confirmation prompt "
-             "(non-TTY runs need this)",
+        help="required with any --noop-* flag; without it every write is refused. "
+             "Each write additionally needs an interactive typed YES (TTY only).",
     )
     return ap.parse_args(argv)
 
@@ -409,14 +411,21 @@ def selected_steps(args: argparse.Namespace) -> list[tuple[str, str, str]]:
     return [t for t in STEPS if getattr(args, f"noop_{t[0].replace('-', '_')}")]
 
 
-def confirm(step: str, frame: bytes, yes: bool) -> bool:
-    if yes:
-        return True
+async def confirm(step: str, desc: str) -> bool:
+    """Per-write interactive gate; no non-interactive override exists.
+
+    Runs input() in a worker thread so aioesphomeapi keepalives/notifications
+    keep flowing during the human pause.
+    """
     if not sys.stdin.isatty():
-        print(f"  REFUSED {step}: stdin is not a TTY and --yes was not given")
+        print(f"  REFUSED {step}: writes require an interactive TTY")
         return False
-    prompt = f"  send NO-OP {step} frame {frame.decode('latin1')!r}? type YES to send: "
-    return input(prompt).strip() == "YES"
+    prompt = (
+        f"  send NO-OP {step} ({desc})? a fresh state read + power-OFF check "
+        "follows; type YES to proceed: "
+    )
+    answer = await asyncio.to_thread(input, prompt)
+    return answer.strip() == "YES"
 
 
 def run_offline(args: argparse.Namespace) -> int:
@@ -477,25 +486,27 @@ async def run_live(args: argparse.Namespace) -> int:
             print("\nread-only run complete; nothing written besides EE0c0./EE000.")
             return 0
 
-        # ---- safety gate: power must read OFF ----
-        if st.power_on is not False:
-            reading = "ON" if st.power_on else "not reported"
-            print(
-                f"\n❌ SAFETY GATE: power reads {reading}, not OFF — "
-                "refusing ALL write steps."
-            )
-            return 3
-
         failures = 0
         for step, cmd_id_expected, desc in steps:
             print(f"\n--- NO-OP STEP cmd {cmd_id_expected}: {step} ({desc}) ---")
+            # confirm FIRST: the human pause is unbounded, so everything the
+            # write depends on (power gate, current value) is re-read AFTER it
+            if not await confirm(step, desc):
+                print("  skipped by user")
+                continue
+            st = await query_all(link)
+            # ---- per-step safety gate on the FRESH state ----
+            if st.power_on is not False:
+                reading = "ON" if st.power_on else "not reported"
+                print(
+                    f"  ❌ SAFETY GATE: power now reads {reading}, not OFF — "
+                    "aborting the WHOLE run."
+                )
+                return 3
             try:
                 frame = build_noop_frame(step, st)
             except StepError as e:
                 print(f"  SKIPPED: {e}")
-                continue
-            if not confirm(step, frame, args.yes):
-                print("  skipped by user")
                 continue
             t0 = time.monotonic()
             raw = await link.request(frame, f"noop-{step}")
@@ -511,7 +522,7 @@ async def run_live(args: argparse.Namespace) -> int:
                 )
                 failures += 1
                 break
-            # same-connection read-back + diff
+            # same-connection read-back + diff against the fresh pre-write state
             st_after = await query_all(link)
             real, expect = diff_states(st, st_after)
             for line in expect:
@@ -523,7 +534,6 @@ async def run_live(args: argparse.Namespace) -> int:
                 failures += 1
                 break
             print("  ✅ PASS: rc=0 and read-back identical (device clock aside)")
-            st = st_after  # next step diffs against the freshest state
         verdict = (
             f"❌ FAILURES: {failures}" if failures
             else "✅ all requested steps passed"
@@ -542,6 +552,12 @@ async def run_live(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
+    if args.state_frame and not args.dry_run:
+        print(
+            "❌ --state-frame is only meaningful with --dry-run; refusing to "
+            "start a live run with it (least surprise for a safety tool)."
+        )
+        return 2
     if args.dry_run or args.parse:
         return run_offline(args)
     if selected_steps(args) and not args.confirm_writes:

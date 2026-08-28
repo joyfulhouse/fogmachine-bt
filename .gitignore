@@ -8,6 +8,10 @@ sources/decompiled/
 # dumps with sources/ha-scan/ble_scan.py when needed.
 sources/ha-scan/ble_devices_dump*.json
 
+# Secrets (HA / ESPHome tokens for the scan/probe scripts) — never commit.
+.env
+*.env
+
 # Python
 .venv/
 __pycache__/
