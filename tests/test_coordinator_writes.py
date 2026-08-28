@@ -9,6 +9,7 @@ with the freshly-read device state (no optimistic patching).
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +18,27 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from custom_components.fogmachine_bt.coordinator import FogMachineCoordinator
 from custom_components.fogmachine_bt.fogmachine import protocol as p
 from custom_components.fogmachine_bt.fogmachine.client import FogMachineError
+
+
+def _real_ha_installed() -> bool:
+    """True only for a real Home Assistant install, never the conftest stubs."""
+    try:
+        return importlib.util.find_spec("homeassistant") is not None
+    except ValueError:  # stub module in sys.modules has no __spec__
+        return False
+
+
+# These tests construct the coordinator against the conftest HA stubs
+# (SimpleNamespace hass/config_entry); a real DataUpdateCoordinator needs a
+# full hass and would fail loudly. The stubs never shadow a real install, so
+# skip here instead.
+pytestmark = pytest.mark.skipif(
+    _real_ha_installed(),
+    reason=(
+        "stub-targeted unit tests; real-HA coverage is tests/_import_check.py "
+        "+ the pytest-homeassistant-custom-component follow-up"
+    ),
+)
 
 
 class FakeClient:
