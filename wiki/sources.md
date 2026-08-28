@@ -11,6 +11,8 @@ under `/sources/`; add new evidence and record it here. See [SCHEMA](SCHEMA.md).
 | BLE scan script | `sources/ha-scan/ble_scan.py` | HA websocket `bluetooth/subscribe_advertisements` scanner (per-proxy RSSI). |
 | BLE scan dumps | `sources/ha-scan/ble_devices_dump.json`, `…_60s.json` | Live advertisement captures 2026-08-24 proving proxy visibility. |
 | Codex analysis | `sources/codex-analysis/PROTOCOL_CODEX.md` | Independent second-opinion protocol doc (parallel RE cross-check). |
+| Live-verify probe | `sources/ha-scan/ble_verify.py` | Human-run safety gate for cmd 2–7: read-only query + opt-in no-op writes with raw-byte capture and read-back diff. Checklist: [live-verify](live-verify.md). |
+| Live-verify transcripts | `sources/ha-scan/live-verify/` | Raw `tee` transcripts of each live-verify run (request/response bytes, rc, diffs). ⚠️ empty until the human runs the gate. |
 
 ## Key app classes (jadx) — quick map
 
