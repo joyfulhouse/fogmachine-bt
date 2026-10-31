@@ -32,6 +32,16 @@ The `FFE0` service + a `FF##` MAC + the `FG` name are the signature of an
 **HM-10 / JDY / CC254x-class BLE serial module**. Details of the GATT profile
 the app drives are on [ble-transport](ble-transport.md).
 
+## Other FG models seen in the field
+
+- **FG11777** (third-party user, via an M5Stack Atom Lite ESPHome proxy) —
+  discovered by the FFE0 matcher; power switch works and mode reads correctly
+  ("Nimble"). Suggests the same HM-10 protocol across the FG range. Source:
+  [issue #3](https://github.com/joyfulhouse/fogmachine-bt/issues/3) (user
+  report, 2026-10-31). Running time read 0 after a short run — consistent with
+  the `HHMMSS` counter shown in hours at 2 dp; ⚠️ unverified whether the
+  counter resets on power-off.
+
 ## Notes for integration
 
 - The app never filters by name or UUID when scanning — it lists every LE

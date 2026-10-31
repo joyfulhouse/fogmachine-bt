@@ -93,6 +93,24 @@ Given marginal RF ([ha-proxy-coverage](ha-proxy-coverage.md)):
 - Surface availability from last successful query, not from mere advert presence.
 - Strongly recommend a closer proxy before relying on automations.
 
+### Setup must not block on BLE (verified — issue #3)
+
+`async_setup_entry` registers the platforms and starts the first query-all
+poll as a **background task** (`entry.async_create_background_task`); it must
+never `await` a BLE round-trip. Reason: on "Configure", HA awaits setup inside
+the config-flow HTTP request (`ConfigEntriesFlowManager.async_finish_flow` →
+`async_add` → `async_setup`, unshielded), and HA's HTTP server runs with
+`handler_cancellation=True` (`homeassistant/components/http/server.py`). A first
+connect over a proxy can take ~2 min (bleak-retry-connector: 4 attempts × 20 s,
+plus 15 s handshake + 15 s query timeouts), so a closed dialog / backgrounded
+mobile app / reverse-proxy timeout cancelled setup. A *cancelled* setup lands in
+`SETUP_ERROR`, which HA never retries (unlike `ConfigEntryNotReady`) — it only
+recovered on the next HA restart. Evidence: field report + traceback in
+[issue #3](https://github.com/joyfulhouse/fogmachine-bt/issues/3); fixed in
+0.1.8, regression test `tests/test_setup_entry.py`. Platforms are forwarded
+*before* the refresh so entities are coordinator listeners (the coordinator
+only schedules follow-up polls while it has listeners).
+
 ## Open items to resolve with a live device
 
 1. Confirm CCCD (`0x2902`) notify enable works via `start_notify` over the proxy.
