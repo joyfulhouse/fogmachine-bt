@@ -13,6 +13,7 @@ under `/sources/`; add new evidence and record it here. See [SCHEMA](SCHEMA.md).
 | Codex analysis | `sources/codex-analysis/PROTOCOL_CODEX.md` | Independent second-opinion protocol doc (parallel RE cross-check). |
 | Live-verify probe | `sources/ha-scan/ble_verify.py` | Human-run safety gate for cmd 2–7: read-only query + opt-in no-op writes with raw-byte capture and read-back diff. Checklist: [live-verify](live-verify.md). |
 | Live-verify transcripts | `sources/ha-scan/live-verify/` | Raw `tee` transcripts of each live-verify run (request/response bytes, rc, diffs). ⚠️ empty until the human runs the gate. |
+| GitHub issue #3 | <https://github.com/joyfulhouse/fogmachine-bt/issues/3> | Field report (FG11777 + M5Stack Atom Lite proxy): setup-cancelled traceback that drove the non-blocking-setup fix; confirms power + mode on a second FG model. |
 
 ## Key app classes (jadx) — quick map
 

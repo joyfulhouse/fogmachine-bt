@@ -18,6 +18,7 @@ ESPHome BLE proxies.
 | HA custom integration (protocol + switch/sensor) | ✅ built; 12 unit tests + HA-import check pass |
 | Live validation on real device | ✅ done — connect → query decoded (power/mode/running-time). Live fixes folded in: FFE0-only matcher, FFE1 write-without-response, connect-per-poll for weak links. |
 | Live verification of set-writes (cmd 2–7) | 🧰 tooling ready, ⚠️ awaiting human-run gate — probe `sources/ha-scan/ble_verify.py` + checklist [live-verify](live-verify.md). No set-write has been sent to a live unit yet; control entities stay blocked until this passes. |
+| Non-blocking setup (issue #3: setup cancelled on Configure) | ✅ fixed 0.1.8 — first poll runs in background; see [integration-plan](integration-plan.md#setup-must-not-block-on-ble-verified--issue-3) |
 
 ## The 30-second summary
 

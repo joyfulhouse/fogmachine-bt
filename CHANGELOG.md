@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-31
+
+### Fixed
+
+- **Adding a device no longer fails with "Setup of config entry … cancelled"**
+  ([#3](https://github.com/joyfulhouse/fogmachine-bt/issues/3)). Setup used to
+  wait for the first BLE poll, and Home Assistant runs that setup inside the
+  config-dialog HTTP request, cancelling it if the client disconnects (dialog
+  closed, mobile app backgrounded, reverse-proxy timeout). A slow first connect
+  over a Bluetooth proxy (up to ~2 min) could therefore cancel setup into a
+  permanent error state that HA never retries. Setup now returns immediately;
+  entities show as unavailable until the first poll (run in the background)
+  succeeds, and the normal poll/backoff keeps retrying.
+
 ## [0.1.7] - 2026-08-25
 
 ### Added
