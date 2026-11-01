@@ -41,6 +41,29 @@ tunables):
   bad link.
 - **Hold last-known state** through a few consecutive failures instead of
   flapping entities to `unavailable` on an intermittent link.
+- **Connect only on a fresh advertisement** (`FRESH_ADVERTISEMENT_SECONDS` =
+  60 s, `coordinator._get_device`). `async_ble_device_from_address` is not
+  enough: HA restores cached advertisements at startup
+  (`habluetooth` `BaseHaScanner.restore_discovered_devices`) and keeps a device
+  for minutes after it goes quiet. A silent device is connected elsewhere,
+  stuck, or out of range, so connecting just burns attempts.
+- **Advertisement-driven recovery.** A passive `async_register_callback` on the
+  address triggers an immediate poll (and resets the backoff) on the
+  silent → advertising transition only. Without it, recovery waited out the
+  backoff (up to 30 min). Connect *failures* to an advertising device stay on
+  the backoff so a flaky unit is not hammered.
+- **Never leak a GATT link.** If anything after `establish_connection` fails
+  (notify enable, cancellation, …) the client disconnects before re-raising.
+  A leaked link keeps the device connected, and so silent to every proxy.
+
+Field evidence for the last three:
+[issue #5](https://github.com/joyfulhouse/fogmachine-bt/issues/5). On an HA
+restart the first poll fired on restored advertisement data, the ESPHome proxy
+logged `Connection open failed, status=133` ×3 (ESP-IDF `ESP_GATT_ERROR`), and
+from then on the FG11777 was not heard by any proxy for at least 34 min.
+⚠️ unverified *why* the unit went silent after failed connects. The leading
+hypothesis is the HM-10 believing a half-established link is up; the
+alternative is RF. Fixed in 0.1.9 (`tests/test_reachability.py`).
 
 This makes a weak link *behave well*; it cannot make a very weak link *fast or
 certain*. Expect polls to succeed intermittently at low RSSI, and time-based

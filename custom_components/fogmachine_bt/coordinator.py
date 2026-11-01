@@ -9,9 +9,10 @@ from datetime import timedelta
 
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakError
+from bluetooth_data_tools import monotonic_time_coarse
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -19,6 +20,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     FAILURES_BEFORE_UNAVAILABLE,
+    FRESH_ADVERTISEMENT_SECONDS,
     MAX_BACKOFF_INTERVAL,
     MAX_PAUSE_SECONDS,
     MAX_WINDOW_FROM_MINUTES,
@@ -85,13 +87,70 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
         self.address = address
         self._client = FogMachineBLEClient(self._get_device, entry.title or address)
         self._failures = 0
+        # Set when a poll found no fresh advertisement; the next fresh
+        # advertisement then triggers an immediate poll (see _async_on_advert).
+        self._awaiting_advert = False
         # Serialises config writes so a cmd 6/7 partial-delta merge cannot
         # read self.data while another write is in flight (lost update).
         self._config_lock = asyncio.Lock()
 
     def _get_device(self) -> BLEDevice | None:
-        return bluetooth.async_ble_device_from_address(
+        """Return the device only if a proxy heard it advertise recently.
+
+        HA restores cached advertisements at startup and keeps a device for
+        minutes after it goes quiet, so a non-None BLEDevice does not mean the
+        machine is advertising *now*. It stops advertising while any central
+        holds it, so a stale entry means busy / stuck / out of range. Connecting
+        then just burns attempts (ESPHome ``status=133``) against a unit that
+        is not listening (issue #5).
+        """
+        info = bluetooth.async_last_service_info(
             self.hass, self.address, connectable=True
+        )
+        if info is None or not self._is_fresh(info):
+            return None
+        return info.device
+
+    @staticmethod
+    def _is_fresh(info: bluetooth.BluetoothServiceInfoBleak) -> bool:
+        return monotonic_time_coarse() - info.time <= FRESH_ADVERTISEMENT_SECONDS
+
+    @callback
+    def async_start(self) -> None:
+        """Listen for advertisements so recovery doesn't wait out the backoff."""
+        assert self.config_entry is not None
+        self.config_entry.async_on_unload(
+            bluetooth.async_register_callback(
+                self.hass,
+                self._async_on_advert,
+                bluetooth.BluetoothCallbackMatcher(
+                    address=self.address, connectable=True
+                ),
+                bluetooth.BluetoothScanningMode.PASSIVE,
+            )
+        )
+
+    @callback
+    def _async_on_advert(
+        self,
+        info: bluetooth.BluetoothServiceInfoBleak,
+        _change: bluetooth.BluetoothChange,
+    ) -> None:
+        """Poll as soon as an unreachable device advertises again.
+
+        Fires only on the unreachable -> advertising transition, never on every
+        advert. Connect *failures* to an advertising device stay on the normal
+        backoff, so a flaky unit isn't hammered.
+        """
+        if not self._awaiting_advert or not self._is_fresh(info):
+            return
+        self._awaiting_advert = False
+        self.update_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+        _LOGGER.debug("%s: advertising again; polling now", self.address)
+        self.config_entry.async_create_background_task(
+            self.hass,
+            self.async_request_refresh(),
+            name=f"{DOMAIN} advert refresh {self.address}",
         )
 
     def _on_success(self) -> None:
@@ -106,6 +165,7 @@ class FogMachineCoordinator(DataUpdateCoordinator[FogMachineState]):
     async def _async_update_data(self) -> FogMachineState:
         try:
             if self._get_device() is None:
+                self._awaiting_advert = True
                 raise FogMachineError(
                     f"{self.address} not currently reachable by any Bluetooth proxy"
                 )

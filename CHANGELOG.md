@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-01
+
+### Fixed
+
+- **Entities stuck unavailable after a restart**
+  ([#5](https://github.com/joyfulhouse/fogmachine-bt/issues/5)):
+  - The integration now only connects when a Bluetooth proxy has heard the
+    machine advertise in the last 60 s. Previously it also connected using
+    advertisement data Home Assistant restores at startup, which produced a
+    burst of failed connections (`status=133`) to a device that wasn't
+    listening.
+  - When the machine starts advertising again after being unreachable, it is
+    polled immediately. Previously recovery could wait up to 30 min of backoff.
+  - A connection that fails partway through setup (for example while enabling
+    notifications, or on cancellation) is now always closed. A leaked
+    connection keeps the machine connected and invisible to every proxy.
+
 ## [0.1.8] - 2026-10-31
 
 ### Fixed

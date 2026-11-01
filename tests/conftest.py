@@ -68,7 +68,11 @@ def _install_homeassistant_stubs() -> None:
     class HomeAssistant:
         """Stub of homeassistant.core.HomeAssistant."""
 
+    def callback(func):
+        return func
+
     core.HomeAssistant = HomeAssistant
+    core.callback = callback
 
     config_entries = _register("homeassistant.config_entries")
 
@@ -85,7 +89,32 @@ def _install_homeassistant_stubs() -> None:
     def async_ble_device_from_address(*_args, **_kwargs):
         return None
 
+    def async_last_service_info(*_args, **_kwargs):
+        return None
+
+    def async_register_callback(*_args, **_kwargs):
+        return lambda: None
+
+    class BluetoothScanningMode(enum.Enum):
+        PASSIVE = "passive"
+        ACTIVE = "active"
+
+    class BluetoothChange(enum.Enum):
+        ADVERTISEMENT = 1
+
+    def BluetoothCallbackMatcher(**kwargs):  # noqa: N802 - mirrors HA TypedDict
+        return dict(kwargs)
+
+    class BluetoothServiceInfoBleak:
+        """Stub; tests use SimpleNamespace(device=..., time=...)."""
+
     bluetooth.async_ble_device_from_address = async_ble_device_from_address
+    bluetooth.async_last_service_info = async_last_service_info
+    bluetooth.async_register_callback = async_register_callback
+    bluetooth.BluetoothScanningMode = BluetoothScanningMode
+    bluetooth.BluetoothChange = BluetoothChange
+    bluetooth.BluetoothCallbackMatcher = BluetoothCallbackMatcher
+    bluetooth.BluetoothServiceInfoBleak = BluetoothServiceInfoBleak
 
     helpers = _register("homeassistant.helpers")
     update_coordinator = _register("homeassistant.helpers.update_coordinator")
@@ -134,4 +163,15 @@ def _install_homeassistant_stubs() -> None:
     helpers.update_coordinator = update_coordinator
 
 
+def _install_bluetooth_data_tools_stub() -> None:
+    """bluetooth-data-tools ships with HA's bluetooth stack; stub it for CI."""
+    if importlib.util.find_spec("bluetooth_data_tools") is not None:
+        return
+    import time
+
+    mod = _register("bluetooth_data_tools")
+    mod.monotonic_time_coarse = time.monotonic
+
+
 _install_homeassistant_stubs()
+_install_bluetooth_data_tools_stub()
