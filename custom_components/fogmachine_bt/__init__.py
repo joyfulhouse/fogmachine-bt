@@ -32,6 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FogMachineConfigEntry) -
     assert address is not None
     coordinator = FogMachineCoordinator(hass, entry, address)
     entry.runtime_data = coordinator
+    coordinator.async_start()
     # Forward first so the entities register as coordinator listeners — the
     # coordinator only schedules follow-up polls while it has listeners.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

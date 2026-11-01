@@ -7,6 +7,7 @@ handles connect/reconnect, notification reassembly and command serialisation.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from datetime import datetime
@@ -75,33 +76,43 @@ class FogMachineBLEClient:
                 self._on_disconnected,
                 use_services_cache=True,
             )
-            await client.start_notify(p.CHAR_UUID, self._on_notify)
-            # Pick write type from the characteristic's advertised properties:
-            # prefer write-without-response (HM-10 serial pipe) to avoid GATT
-            # error 3 on write-without-response-only clones.
-            char = client.services.get_characteristic(p.CHAR_UUID)
-            props = list(char.properties) if char else []
-            self._write_response = (
-                "write-without-response" not in props and "write" in props
-            )
-            _LOGGER.debug(
-                "%s: FFE1 properties=%s -> write_response=%s",
-                self._name,
-                props,
-                self._write_response,
-            )
-            self._client = client
-            # Protocol init handshake: the app writes EE0c0. once services are
-            # discovered and expects EE1c0. back. Best-effort (some units may
-            # not reply); the following query is the real readiness check.
+            # From here on the device is connected and has stopped advertising
+            # (single-central HM-10). Any failure before `return` must drop the
+            # link, otherwise the leaked connection keeps the machine invisible
+            # to every proxy until the link times out (issue #5).
             try:
-                await self._txn(
-                    client, p.build_connect(), True, DEFAULT_COMMAND_TIMEOUT
+                await client.start_notify(p.CHAR_UUID, self._on_notify)
+                # Pick write type from the characteristic's advertised properties:
+                # prefer write-without-response (HM-10 serial pipe) to avoid GATT
+                # error 3 on write-without-response-only clones.
+                char = client.services.get_characteristic(p.CHAR_UUID)
+                props = list(char.properties) if char else []
+                self._write_response = (
+                    "write-without-response" not in props and "write" in props
                 )
-            except FogMachineError:
                 _LOGGER.debug(
-                    "%s: connect handshake had no reply; continuing", self._name
+                    "%s: FFE1 properties=%s -> write_response=%s",
+                    self._name,
+                    props,
+                    self._write_response,
                 )
+                self._client = client
+                # Protocol init handshake: the app writes EE0c0. once services are
+                # discovered and expects EE1c0. back. Best-effort (some units may
+                # not reply); the following query is the real readiness check.
+                try:
+                    await self._txn(
+                        client, p.build_connect(), True, DEFAULT_COMMAND_TIMEOUT
+                    )
+                except FogMachineError:
+                    _LOGGER.debug(
+                        "%s: connect handshake had no reply; continuing", self._name
+                    )
+            except BaseException:
+                self._client = None
+                with contextlib.suppress(BleakError, TimeoutError):
+                    await client.disconnect()
+                raise
             _LOGGER.debug("%s: connected + notifications enabled", self._name)
             return client
 

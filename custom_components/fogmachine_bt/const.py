@@ -30,6 +30,11 @@ MAX_BACKOFF_INTERVAL = 1800  # cap for exponential backoff on repeated failure
 # consecutive poll failures before surfacing as unavailable — avoids flapping on
 # a marginal link that succeeds intermittently.
 FAILURES_BEFORE_UNAVAILABLE = 4
+# Only connect if a proxy heard the device advertise within this window. The
+# device advertises continuously while idle, so anything older means it is
+# connected elsewhere / stuck / out of range, or the entry is a cached advert
+# HA restored at startup (issue #5).
+FRESH_ADVERTISEMENT_SECONDS = 60
 
 # --- config-write validation limits (choke point: coordinator) ---
 # Mirror the OEM app's input limits: spray duty cycle work 3–84600 s / pause
@@ -54,6 +59,7 @@ __all__ = [
     "DEFAULT_SCAN_INTERVAL",
     "MAX_BACKOFF_INTERVAL",
     "FAILURES_BEFORE_UNAVAILABLE",
+    "FRESH_ADVERTISEMENT_SECONDS",
     "MIN_WORK_SECONDS",
     "MAX_WORK_SECONDS",
     "MIN_PAUSE_SECONDS",

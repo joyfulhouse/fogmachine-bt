@@ -24,7 +24,11 @@ class FakeCoordinator:
         self.refresh_started = asyncio.Event()
         self.release = asyncio.Event()
         self.refreshed = False
+        self.entry = entry
         FakeCoordinator.instances.append(self)
+
+    def async_start(self) -> None:
+        self.entry.events.append("start")
 
     async def async_refresh(self) -> None:
         self.refresh_started.set()
@@ -67,7 +71,8 @@ async def test_setup_returns_without_waiting_for_first_poll(monkeypatch):
     assert entry.runtime_data is coordinator
     # Platforms (coordinator listeners) must exist before the first poll runs,
     # otherwise the coordinator never schedules follow-up polls.
-    assert entry.events == ["forward", "background_task"]
+    # The advertisement listener is registered before anything else (#5).
+    assert entry.events == ["start", "forward", "background_task"]
 
     await coordinator.refresh_started.wait()
     assert not coordinator.refreshed

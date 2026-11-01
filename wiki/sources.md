@@ -14,6 +14,7 @@ under `/sources/`; add new evidence and record it here. See [SCHEMA](SCHEMA.md).
 | Live-verify probe | `sources/ha-scan/ble_verify.py` | Human-run safety gate for cmd 2–7: read-only query + opt-in no-op writes with raw-byte capture and read-back diff. Checklist: [live-verify](live-verify.md). |
 | Live-verify transcripts | `sources/ha-scan/live-verify/` | Raw `tee` transcripts of each live-verify run (request/response bytes, rc, diffs). ⚠️ empty until the human runs the gate. |
 | GitHub issue #3 | <https://github.com/joyfulhouse/fogmachine-bt/issues/3> | Field report (FG11777 + M5Stack Atom Lite proxy): setup-cancelled traceback that drove the non-blocking-setup fix; confirms power + mode on a second FG model. |
+| GitHub issue #5 | <https://github.com/joyfulhouse/fogmachine-bt/issues/5> | Field logs (FG11777, HA restart on 0.1.8): ESPHome proxy `status=133` ×3 at startup, then "not currently reachable" for 34+ min. Drove the 0.1.9 reachability fixes. |
 
 ## Key app classes (jadx) — quick map
 
